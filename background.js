@@ -62,10 +62,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab?.id) return;
-  await chrome.sidePanel.open({ tabId: tab.id });
-});
+if (chrome.action?.onClicked) {
+  chrome.action.onClicked.addListener(async (tab) => {
+    if (!tab?.id) return;
+    if (chrome.sidePanel?.open) {
+      await chrome.sidePanel.open({ tabId: tab.id });
+    }
+  });
+}
 
 async function handleMessage(message, sender) {
   const msgType = message?.type;
@@ -76,6 +80,10 @@ async function handleMessage(message, sender) {
 
   if (msgType === "CREATE_GMAIL_DRAFT") {
     return handleCreateGmailDraft(message?.payload || {});
+  }
+
+  if (msgType === "OPEN_URL") {
+    return handleOpenUrl(message?.payload || {});
   }
 
   if (msgType === "SAVE_EMAIL_TO_PIPEDRIVE_PERSON") {
@@ -94,6 +102,10 @@ async function handleMessage(message, sender) {
     return handleLinkedInMatchPerson(message?.payload || {});
   }
 
+  if (msgType === "LINKEDIN_SEARCH_PERSONS") {
+    return handleLinkedInSearchPersons(message?.payload || {});
+  }
+
   if (msgType === "LINKEDIN_CONFIRM_MATCH") {
     return handleLinkedInConfirmMatch(message?.payload || {});
   }
@@ -104,6 +116,10 @@ async function handleMessage(message, sender) {
 
   if (msgType === "LINKEDIN_GET_TEMPLATES") {
     return handleLinkedInGetTemplates(message?.payload || {});
+  }
+
+  if (msgType === "LINKEDIN_GET_TALKING_POINTS") {
+    return handleLinkedInGetTalkingPoints(message?.payload || {});
   }
 
   if (msgType === "LINKEDIN_INSERT_TEMPLATE") {
@@ -205,6 +221,20 @@ async function handleCreateGmailDraft(payload) {
   };
 }
 
+async function handleOpenUrl(payload) {
+  const normalized = normalizeOpenUrl(payload.url);
+  if (!normalized) {
+    throw new Error("URL is required.");
+  }
+
+  try {
+    await chrome.tabs.create({ url: normalized });
+    return { opened: true, url: normalized };
+  } catch (_error) {
+    throw new Error("Failed to open the URL in a new tab.");
+  }
+}
+
 async function handleSaveEmail(payload, sender) {
   const personId = Number(payload.personId);
   const email = String(payload.email || "").trim();
@@ -236,7 +266,7 @@ async function handleSaveEmail(payload, sender) {
   });
 
   return {
-    person: pickPersonFields(updated)
+    person: pickPersonFields(updated, options)
   };
 }
 
@@ -308,7 +338,7 @@ async function buildDealContext(dealId, baseOrigin, apiToken, options) {
   return {
     type: "deal",
     deal,
-    person: pickPersonFields(personRaw),
+    person: pickPersonFields(personRaw, options),
     org: pickOrgFields(orgRaw),
     openDeals,
     activities: Array.isArray(activitiesRaw) ? activitiesRaw.map(pickActivityFields) : [],
@@ -328,7 +358,7 @@ async function buildPersonContext(personId, baseOrigin, apiToken, options) {
     baseOrigin,
     apiToken
   });
-  const person = pickPersonFields(personRaw);
+  const person = pickPersonFields(personRaw, options);
 
   const [orgRaw, dealsRaw, activitiesRaw, notesRaw, dealFieldsRaw, personFieldsRaw] = await Promise.all([
     person.org?.id
@@ -410,7 +440,7 @@ function pickDealFields(deal) {
   };
 }
 
-function pickPersonFields(person) {
+function pickPersonFields(person, options = {}) {
   if (!person) return null;
 
   const primaryEmail = extractPrimaryValue(person.email);
@@ -427,7 +457,7 @@ function pickPersonFields(person) {
     primaryPhone,
     emails: normalizeValueList(person.email),
     phones: normalizeValueList(person.phone),
-    linkedIn: findLinkedInUrl(person),
+    linkedIn: findLinkedInUrl(person, options),
     org: normalizeEntity(person.org_id, person.org_name),
     updateTime: person.update_time || null
   };
@@ -764,6 +794,21 @@ function safeJson(response) {
     .catch(() => ({}));
 }
 
+function normalizeOpenUrl(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) return "";
+
+  const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value.replace(/^\/+/, "")}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    return parsed.toString();
+  } catch (_error) {
+    return "";
+  }
+}
+
 function normalizeEntity(entity, fallbackName) {
   if (!entity) return null;
 
@@ -1031,16 +1076,60 @@ function compactAddress(org) {
   return parts.join(", ");
 }
 
-function findLinkedInUrl(person) {
-  if (!person || !Array.isArray(person.im)) return "";
-  const profile = person.im.find((entry) => /linkedin\.com/i.test(String(entry?.value || "")));
-  return profile?.value || "";
+function findLinkedInUrl(person, options = {}) {
+  if (!person) return "";
+
+  const customFieldKey = String(options?.personLinkedinProfileUrlKey || "").trim();
+  const fromCustomField = customFieldKey ? String(person?.[customFieldKey] || "").trim() : "";
+
+  if (fromCustomField) {
+    return normalizeLinkedInUrl(fromCustomField);
+  }
+
+  if (Array.isArray(person.im)) {
+    const profile = person.im.find((entry) =>
+      String(entry?.value || "").toLowerCase().includes("linkedin.com")
+    );
+    const fromIm = String(profile?.value || "").trim();
+    if (fromIm) {
+      return normalizeLinkedInUrl(fromIm);
+    }
+  }
+
+  const rawWebsite = String(person.website || person.linkedin || "").trim();
+  if (rawWebsite.toLowerCase().includes("linkedin.com")) {
+    return normalizeLinkedInUrl(rawWebsite);
+  }
+
+  return "";
+}
+
+function normalizeLinkedInUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, "")}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    if (!String(parsed.hostname || "").toLowerCase().includes("linkedin.com")) {
+      return raw;
+    }
+    parsed.hash = "";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch (_error) {
+    return raw;
+  }
 }
 
 async function handleOpenLinkedInSidePanel(sender) {
   const tabId = sender?.tab?.id;
   if (!tabId) {
     throw new Error("No tab context available to open side panel.");
+  }
+
+  if (!chrome.sidePanel?.open) {
+    throw new Error("Side Panel API is not available in this Chrome version. Use the in-page LinkedIn widget fallback.");
   }
 
   await chrome.sidePanel.open({ tabId });
@@ -1182,6 +1271,27 @@ async function handleLinkedInConfirmMatch(payload) {
   };
 }
 
+async function handleLinkedInSearchPersons(payload) {
+  const options = await getOptions();
+  assertLinkedInOptions(options);
+
+  const query = String(payload.query || "").trim();
+  if (!query) {
+    throw new Error("Search query is required.");
+  }
+
+  const baseOrigin = getBaseOriginFromActiveTabOrFallback();
+  const results = await searchPersonByName({
+    baseOrigin,
+    apiToken: options.apiToken,
+    name: query
+  });
+
+  return {
+    candidates: results.map(toMatchedPersonSummary)
+  };
+}
+
 async function handleLinkedInGetSequences() {
   const options = await getOptions();
   const backendBaseUrl = normalizeBackendBaseUrl(options.backendBaseUrl);
@@ -1205,6 +1315,25 @@ async function handleLinkedInGetTemplates(payload) {
 
   const data = await fetchBackendJson(`${backendBaseUrl}/templates?${params.toString()}`);
   return data;
+}
+
+async function handleLinkedInGetTalkingPoints(payload) {
+  const personId = Number(payload.personId);
+  if (!Number.isFinite(personId) || personId <= 0) {
+    throw new Error("Valid personId is required for talking points.");
+  }
+
+  const options = await getOptions();
+  assertLinkedInOptions(options);
+  const baseOrigin = getBaseOriginFromActiveTabOrFallback();
+
+  const context = await buildPersonContext(personId, baseOrigin, options.apiToken, options);
+  const brief = buildDeterministicBrief(context, options);
+
+  return {
+    preCall: brief.preCall,
+    cards: brief.cards || []
+  };
 }
 
 async function handleLinkedInLogAndAdvance(payload) {
@@ -1306,7 +1435,13 @@ function sendTabMessage(tabId, message) {
 }
 
 function isLinkedInUrl(rawUrl) {
-  return /https?:\\/\\/(?:www\\.)?linkedin\\.com/i.test(String(rawUrl || ""));
+  try {
+    const parsed = new URL(String(rawUrl || ""));
+    const host = String(parsed.hostname || "").toLowerCase();
+    return host === "linkedin.com" || host.endsWith(".linkedin.com");
+  } catch (_error) {
+    return false;
+  }
 }
 
 function readBooleanField(value) {
@@ -1338,12 +1473,18 @@ async function fetchBackendJson(url) {
 }
 
 function toMatchedPersonSummary(person) {
+  const linkedInFromIm = Array.isArray(person?.im)
+    ? person.im.find((entry) =>
+        String(entry?.value || "").toLowerCase().includes("linkedin.com")
+      )?.value || ""
+    : "";
+
   return {
     id: Number(person?.id) || null,
     name: person?.name || "Unknown",
     orgName: person?.org_id?.name || person?.org_name || "",
     email: extractPrimaryValue(person?.email),
-    linkedInUrl: person?.linkedin_profile_url || person?.im?.find((entry) => /linkedin\\.com/i.test(String(entry?.value || "")))?.value || "",
+    linkedInUrl: person?.linkedin_profile_url || linkedInFromIm,
     dealTitle: person?.open_deals_count ? `${person.open_deals_count} open deal(s)` : ""
   };
 }

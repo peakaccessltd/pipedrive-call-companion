@@ -22,6 +22,8 @@ let activeState = {
 };
 let watcherTimer = null;
 let notesSaveTimer = null;
+let manualPanelHidden = false;
+let lastContextKey = "";
 
 init();
 
@@ -56,16 +58,32 @@ async function runDetection(isInitial) {
 
   currentHref = window.location.href;
   currentContext = parsePageContext(currentHref);
+  const contextKey = currentContext ? `${currentContext.type}:${currentContext.id}` : "";
+
+  if (contextKey !== lastContextKey) {
+    manualPanelHidden = false;
+    lastContextKey = contextKey;
+  }
 
   if (!currentContext) {
-    hideAll();
+    renderContainerShell();
+    setState({
+      loading: false,
+      error: "Open a specific Deal or Person page to load Call Companion context.",
+      context: null,
+      brief: null,
+      mode: "idle",
+      draftStatus: ""
+    });
+    await renderBody();
+    closePanel();
     return;
   }
 
   const options = await getOptions();
   renderContainerShell();
 
-  if (options.autoOpenPanel) {
+  if (options.autoOpenPanel && !manualPanelHidden) {
     openPanel();
   } else {
     closePanel();
@@ -106,6 +124,14 @@ function renderContainerShell() {
   const header = document.createElement("div");
   header.className = "cc-header";
 
+  const brand = document.createElement("div");
+  brand.className = "cc-brand";
+
+  const logo = document.createElement("img");
+  logo.className = "cc-logo";
+  logo.src = chrome.runtime.getURL("icons/logo-source.png");
+  logo.alt = "Peak Access";
+
   const title = document.createElement("h2");
   title.className = "cc-title";
   title.textContent = "Call Companion";
@@ -127,11 +153,16 @@ function renderContainerShell() {
   closeBtn.className = "cc-btn cc-btn-secondary";
   closeBtn.type = "button";
   closeBtn.textContent = "Hide";
-  closeBtn.addEventListener("click", () => closePanel());
+  closeBtn.addEventListener("click", () => {
+    manualPanelHidden = true;
+    closePanel();
+  });
 
   controls.appendChild(refreshBtn);
   controls.appendChild(closeBtn);
-  header.appendChild(title);
+  brand.appendChild(logo);
+  brand.appendChild(title);
+  header.appendChild(brand);
   header.appendChild(controls);
   panelEl.appendChild(header);
 
@@ -139,6 +170,11 @@ function renderContainerShell() {
   body.className = "cc-body";
   body.dataset.role = "body";
   panelEl.appendChild(body);
+
+  const footer = document.createElement("div");
+  footer.className = "cc-footer";
+  footer.dataset.role = "footer";
+  panelEl.appendChild(footer);
 }
 
 async function loadContextAndBrief(contextRef) {
@@ -178,9 +214,11 @@ function setState(partial) {
 
 async function renderBody() {
   const body = panelEl?.querySelector('[data-role="body"]');
+  const footer = panelEl?.querySelector('[data-role="footer"]');
   if (!body) return;
 
   body.innerHTML = "";
+  if (footer) footer.innerHTML = "";
 
   if (activeState.loading) {
     body.appendChild(renderInfo("Loading call context..."));
@@ -209,7 +247,9 @@ async function renderBody() {
     body.appendChild(renderNotes(context.notes || []));
   }
 
-  body.appendChild(renderActions(context));
+  if (footer) {
+    footer.appendChild(renderActions(context, true));
+  }
 
   if (activeState.mode === "answered") {
     body.appendChild(await renderQuickNotes());
@@ -316,8 +356,11 @@ function renderCards(cards) {
   return section;
 }
 
-function renderActions(context) {
-  const section = createSection("Actions");
+function renderActions(context, compact = false) {
+  const section = compact ? document.createElement("section") : createSection("Actions");
+  if (compact) {
+    section.className = "cc-section cc-section-compact";
+  }
 
   const row = document.createElement("div");
   row.className = "cc-actions-row";
@@ -332,9 +375,17 @@ function renderActions(context) {
     renderBody();
   });
 
-  const linkedInBtn = button("Open LinkedIn", "cc-btn-secondary", () => {
+  const linkedInBtn = button("Open LinkedIn", "cc-btn-secondary", async () => {
     const url = buildLinkedInUrl(context);
-    window.open(url, "_blank", "noopener");
+    const response = await sendMessage({
+      type: "OPEN_URL",
+      payload: { url }
+    });
+
+    if (!response.ok) {
+      setState({ draftStatus: response.error || "Could not open LinkedIn." });
+      renderBody();
+    }
   });
 
   row.appendChild(answeredBtn);
@@ -569,18 +620,36 @@ function buildLinkedInQuery(context) {
   const title = context.person?.title || "";
   const emailDomain = getEmailDomain(context.person?.primaryEmail || "");
 
-  return [personName, orgName, title, emailDomain].filter(Boolean).join(" ");
+  return [personName, title, orgName, emailDomain].filter(Boolean).join(" ");
 }
 
 function buildLinkedInUrl(context) {
-  const direct = String(context.person?.linkedIn || "").trim();
+  const direct = canonicalizeLinkedInUrl(context.person?.linkedIn);
   if (direct) {
     return direct;
   }
 
-  // Google site query usually outperforms LinkedIn internal search for exact people matching.
   const query = buildLinkedInQuery(context);
-  return `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in "${query}"`)}`;
+  if (!query) {
+    return "https://www.linkedin.com/";
+  }
+  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
+}
+
+function canonicalizeLinkedInUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, "")}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    if (!String(parsed.hostname || "").toLowerCase().includes("linkedin.com")) return "";
+    parsed.hash = "";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch (_error) {
+    return "";
+  }
 }
 
 function getEmailDomain(email) {
@@ -628,6 +697,7 @@ function sendMessage(message) {
 
 function openPanel() {
   if (!panelEl || !launcherEl) return;
+  manualPanelHidden = false;
   panelEl.classList.remove("cc-panel-hidden");
   launcherEl.classList.add("cc-launcher-hidden");
 }
@@ -641,7 +711,7 @@ function closePanel() {
 function hideAll() {
   closePanel();
   if (launcherEl) {
-    launcherEl.classList.add("cc-launcher-hidden");
+    launcherEl.classList.remove("cc-launcher-hidden");
   }
 }
 

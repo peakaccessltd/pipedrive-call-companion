@@ -3,7 +3,7 @@
   "name": "Pipedrive Call Companion",
   "description": "Peak Access call companion with Pipedrive context, Gmail draft support, and LinkedIn outreach sequencing.",
   "version": "0.2.0",
-  "permissions": ["storage", "identity", "tabs", "activeTab", "sidePanel", "scripting"],
+  "permissions": ["storage", "identity", "tabs", "activeTab", "scripting"],
   "host_permissions": [
     "https://*.pipedrive.com/*",
     "https://gmail.googleapis.com/*",
@@ -28,12 +28,40 @@
       "run_at": "document_idle"
     }
   ],
-  "side_panel": {
-    "default_path": "sidepanel.html"
-  },
   "action": {
-    "default_title": "Peak Access"
+    "default_title": "Peak Access",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "sidepanel.html",
+        "sidepanel.css",
+        "sidepanel.js",
+        "icons/icon16.png",
+        "icons/icon32.png",
+        "icons/icon48.png",
+        "icons/icon128.png",
+        "icons/logo-source.png"
+      ],
+      "matches": ["https://*.linkedin.com/*"]
+    },
+    {
+      "resources": ["icons/icon16.png", "icons/icon32.png", "icons/icon48.png", "icons/icon128.png", "icons/logo-source.png"],
+      "matches": ["https://*.pipedrive.com/*"]
+    }
+  ],
   "options_page": "options.html",
   "oauth2": {
     "client_id": "374165809311-h5lbpnh7vshfg4e2elq4lb4ljv710g38.apps.googleusercontent.com",

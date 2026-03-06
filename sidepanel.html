@@ -9,7 +9,10 @@
   <body>
     <main class="sp-root">
       <header class="sp-header">
-        <h1>LinkedIn Mode</h1>
+        <div class="sp-brand">
+          <img class="sp-logo" src="icons/logo-source.png" alt="Peak Access" />
+          <h1>LinkedIn Mode</h1>
+        </div>
         <button id="refreshBtn" class="sp-btn sp-btn-secondary" type="button">Refresh</button>
       </header>
 
@@ -33,6 +36,16 @@
         <input id="stageInput" class="sp-input" type="number" min="1" step="1" />
 
         <div id="templatesList" class="sp-stack"></div>
+      </section>
+
+      <section class="sp-section">
+        <div class="sp-section-head">
+          <h2>Talking Points</h2>
+          <button id="talkingPointsToggle" class="sp-btn sp-btn-secondary" type="button" aria-expanded="false">
+            Show
+          </button>
+        </div>
+        <div id="talkingPoints" class="sp-stack sp-collapsed"></div>
       </section>
 
       <section class="sp-section">

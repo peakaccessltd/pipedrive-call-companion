@@ -6,6 +6,8 @@ const refs = {
   sequenceSelect: document.getElementById("sequenceSelect"),
   stageInput: document.getElementById("stageInput"),
   templatesList: document.getElementById("templatesList"),
+  talkingPoints: document.getElementById("talkingPoints"),
+  talkingPointsToggle: document.getElementById("talkingPointsToggle"),
   draftText: document.getElementById("draftText"),
   insertBtn: document.getElementById("insertBtn"),
   copyBtn: document.getElementById("copyBtn"),
@@ -18,9 +20,11 @@ const state = {
   match: null,
   sequences: [],
   templates: [],
+  talkingPoints: [],
   selectedTemplate: null,
   selectedSequenceId: "",
-  stage: 1
+  stage: 1,
+  talkingPointsExpanded: false
 };
 
 refs.refreshBtn.addEventListener("click", refreshAll);
@@ -29,8 +33,10 @@ refs.stageInput.addEventListener("change", onStageChanged);
 refs.insertBtn.addEventListener("click", onInsertTemplate);
 refs.copyBtn.addEventListener("click", onCopy);
 refs.logAdvanceBtn.addEventListener("click", onLogAndAdvance);
+refs.talkingPointsToggle.addEventListener("click", onTalkingPointsToggle);
 
 refreshAll();
+syncTalkingPointsVisibility();
 
 async function refreshAll() {
   setStatus("Loading LinkedIn Mode context...");
@@ -60,6 +66,7 @@ async function refreshAll() {
     state.stage = Number(state.match.currentStage || 1);
     refs.stageInput.value = String(state.stage);
     renderMatchCard();
+    await loadTalkingPoints();
   }
 
   const sequencesResp = await sendRuntimeMessage({ type: "LINKEDIN_GET_SEQUENCES" });
@@ -103,6 +110,27 @@ async function loadTemplates() {
 
   state.templates = resp.data.templates || [];
   renderTemplates();
+}
+
+async function loadTalkingPoints() {
+  state.talkingPoints = [];
+  renderTalkingPoints();
+
+  const personId = state.match?.person?.id;
+  if (!personId) return;
+
+  const resp = await sendRuntimeMessage({
+    type: "LINKEDIN_GET_TALKING_POINTS",
+    payload: { personId }
+  });
+
+  if (!resp.ok) {
+    setStatus(resp.error || "Failed to load talking points", true);
+    return;
+  }
+
+  state.talkingPoints = resp.data?.cards || [];
+  renderTalkingPoints(resp.data?.preCall || null);
 }
 
 function renderLinkedInContext() {
@@ -162,6 +190,7 @@ function renderMatchCard() {
 
       state.match = resp.data;
       renderMatchCard();
+      await loadTalkingPoints();
       setStatus("Match confirmed and LinkedIn URL saved.", false, true);
     });
 
@@ -230,6 +259,59 @@ function renderTemplates() {
     wrapper.appendChild(selectBtn);
     refs.templatesList.appendChild(wrapper);
   });
+}
+
+function renderTalkingPoints(preCall = null) {
+  refs.talkingPoints.innerHTML = "";
+
+  if (preCall?.oneLiner) {
+    const intro = document.createElement("div");
+    intro.className = "sp-card";
+    intro.textContent = preCall.oneLiner;
+    refs.talkingPoints.appendChild(intro);
+  }
+
+  if (!state.talkingPoints.length) {
+    const card = document.createElement("div");
+    card.className = "sp-card";
+    card.textContent = "No talking points yet. Confirm a person match first.";
+    refs.talkingPoints.appendChild(card);
+    return;
+  }
+
+  state.talkingPoints.forEach((cardData) => {
+    const card = document.createElement("article");
+    card.className = "sp-template";
+
+    const title = document.createElement("strong");
+    title.textContent = cardData.title || "Talking point";
+
+    const list = document.createElement("ul");
+    list.style.margin = "0";
+    list.style.paddingLeft = "18px";
+    list.style.display = "grid";
+    list.style.gap = "4px";
+    (cardData.bullets || []).forEach((bullet) => {
+      const li = document.createElement("li");
+      li.textContent = bullet;
+      list.appendChild(li);
+    });
+
+    card.appendChild(title);
+    card.appendChild(list);
+    refs.talkingPoints.appendChild(card);
+  });
+}
+
+function onTalkingPointsToggle() {
+  state.talkingPointsExpanded = !state.talkingPointsExpanded;
+  syncTalkingPointsVisibility();
+}
+
+function syncTalkingPointsVisibility() {
+  refs.talkingPoints.classList.toggle("sp-collapsed", !state.talkingPointsExpanded);
+  refs.talkingPointsToggle.textContent = state.talkingPointsExpanded ? "Hide" : "Show";
+  refs.talkingPointsToggle.setAttribute("aria-expanded", state.talkingPointsExpanded ? "true" : "false");
 }
 
 function renderTemplateBody(body) {

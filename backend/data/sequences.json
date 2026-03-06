@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updated_at": "2026-03-06T00:00:00.000Z",
+  "sequences": [
+    {
+      "id": "default-linkedin-outreach",
+      "name": "Default LinkedIn Outreach",
+      "description": "Human-in-the-loop LinkedIn DM sequence aligned to deal stage progression.",
+      "recommended_start_stage": 1,
+      "templates": [
+        {
+          "id": "li-stage1-open",
+          "stage": 1,
+          "label": "Stage 1 Intro",
+          "body": "Hi {{personFirstName}} - thanks for connecting. I work with teams like {{orgName}} on {{useCaseOrDeal}}. Open to a quick exchange this week?"
+        },
+        {
+          "id": "li-stage2-value",
+          "stage": 2,
+          "label": "Stage 2 Value Follow-up",
+          "body": "Hi {{personFirstName}}, following up with one practical idea for {{orgName}}: {{valueHook}}. If useful, I can share a concise 2-step plan."
+        },
+        {
+          "id": "li-stage3-proof",
+          "stage": 3,
+          "label": "Stage 3 Proof + CTA",
+          "body": "Hi {{personFirstName}}, we recently helped a similar team reduce time-to-outcome. If this is still relevant, would a 10-minute chat next week help?"
+        }
+      ]
+    }
+  ]
+}

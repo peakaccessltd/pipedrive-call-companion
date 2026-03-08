@@ -19,7 +19,9 @@ let activeState = {
   context: null,
   brief: null,
   mode: "idle",
-  draftStatus: ""
+  draftStatus: "",
+  focusNoAnswer: false,
+  focusTalkingPoints: false
 };
 let watcherTimer = null;
 let notesSaveTimer = null;
@@ -94,7 +96,9 @@ async function runDetection(isInitial) {
       context: null,
       brief: null,
       mode: "idle",
-      draftStatus: ""
+      draftStatus: "",
+      focusNoAnswer: false,
+      focusTalkingPoints: false
     });
     await renderBody();
     closePanel();
@@ -261,11 +265,13 @@ async function renderBody() {
   const options = await getOptions();
 
   body.appendChild(renderContextSummary(context, options));
+  body.appendChild(renderTimeline(context, options));
   body.appendChild(renderPreCall(brief.preCall));
-  body.appendChild(renderCards(brief.cards));
-
-  if (options.showNotes) {
-    body.appendChild(renderNotes(context.notes || []));
+  const talkingSection = renderCards(brief.cards);
+  body.appendChild(talkingSection);
+  if (activeState.focusTalkingPoints) {
+    queueFocusTalkingPoints(talkingSection);
+    setState({ focusTalkingPoints: false });
   }
 
   if (footer) {
@@ -277,7 +283,12 @@ async function renderBody() {
   }
 
   if (activeState.mode === "no-answer") {
-    body.appendChild(renderNoAnswer(brief.noAnswer));
+    const noAnswerSection = renderNoAnswer(brief.noAnswer);
+    body.appendChild(noAnswerSection);
+    if (activeState.focusNoAnswer) {
+      queueFocusNoAnswer(noAnswerSection);
+      setState({ focusNoAnswer: false });
+    }
   }
 
   if (activeState.draftStatus) {
@@ -286,10 +297,6 @@ async function renderBody() {
 
   if (needsEmail(context)) {
     body.appendChild(renderPasteEmail(context));
-  }
-
-  if (options.showActivities) {
-    body.appendChild(renderActivities(context.activities || []));
   }
 }
 
@@ -310,14 +317,14 @@ function renderContextSummary(context) {
   const website = context.org?.website || "N/A";
   const linkedIn = context.person?.linkedIn || "N/A";
 
-  list.appendChild(listItem(`Person: ${personName}`));
-  list.appendChild(listItem(`Title: ${title}`));
-  list.appendChild(listItem(`Org: ${orgName}`));
-  list.appendChild(listItem(`Owner: ${owner}`));
-  list.appendChild(listItem(`Deal: ${dealTitle}`));
-  list.appendChild(listItem(`Stage / Value: ${stage} / ${value}`));
-  list.appendChild(listItem(`Org Website: ${website}`));
-  list.appendChild(listItem(`LinkedIn Profile: ${linkedIn}`));
+  list.appendChild(labelValueItem("Person", personName));
+  list.appendChild(labelValueItem("Title", title));
+  list.appendChild(labelValueItem("Org", orgName));
+  list.appendChild(labelValueItem("Owner", owner));
+  list.appendChild(labelValueItem("Deal", dealTitle));
+  list.appendChild(labelValueItem("Stage / Value", `${stage} / ${value}`));
+  list.appendChild(labelValueItem("Org Website", website));
+  list.appendChild(labelValueItem("LinkedIn Profile", linkedIn));
 
   section.appendChild(list);
   return section;
@@ -356,10 +363,11 @@ function renderPreCall(preCall) {
 
 function renderCards(cards) {
   const section = createSection("Talking points");
+  section.id = "cc-talking-points-section";
 
   (cards || []).forEach((card) => {
     const cardEl = document.createElement("article");
-    cardEl.className = "cc-card";
+    cardEl.className = "cc-talk-item";
 
     const title = document.createElement("h4");
     title.className = "cc-card-title";
@@ -387,12 +395,12 @@ function renderActions(context, compact = false) {
   row.className = "cc-actions-row";
 
   const answeredBtn = button("Answered", "cc-btn-primary", () => {
-    setState({ mode: "answered", draftStatus: "" });
+    setState({ mode: "answered", draftStatus: "", focusTalkingPoints: true });
     renderBody();
   });
 
   const noAnswerBtn = button("No Answer", "cc-btn-primary", () => {
-    setState({ mode: "no-answer", draftStatus: "" });
+    setState({ mode: "no-answer", draftStatus: "", focusNoAnswer: true });
     renderBody();
   });
 
@@ -419,6 +427,7 @@ function renderActions(context, compact = false) {
 
 function renderNoAnswer(noAnswer) {
   const section = createSection("No Answer follow-up");
+  section.id = "cc-no-answer-section";
 
   (noAnswer?.emailDrafts || []).forEach((draft) => {
     const card = document.createElement("article");
@@ -473,6 +482,26 @@ function renderNoAnswer(noAnswer) {
   });
 
   return section;
+}
+
+function queueFocusTalkingPoints(sectionEl) {
+  if (!sectionEl) return;
+  window.requestAnimationFrame(() => {
+    sectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    sectionEl.setAttribute("tabindex", "-1");
+    sectionEl.focus();
+  });
+}
+
+function queueFocusNoAnswer(sectionEl) {
+  if (!sectionEl) return;
+  window.requestAnimationFrame(() => {
+    sectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    const firstAction = sectionEl.querySelector("button");
+    if (firstAction instanceof HTMLElement) {
+      firstAction.focus();
+    }
+  });
 }
 
 async function renderQuickNotes() {
@@ -556,49 +585,131 @@ function renderPasteEmail(context) {
   return section;
 }
 
-function renderActivities(activities) {
-  const section = createSection("Recent activities");
-  if (!activities.length) {
-    section.appendChild(renderInfo("No activities found."));
+function renderTimeline(context, options) {
+  const includeNotes = Boolean(options?.showNotes);
+  const includeActivities = Boolean(options?.showActivities);
+  const notes = includeNotes ? context.notes || [] : [];
+  const activities = includeActivities ? context.activities || [] : [];
+  const items = buildTimelineItems(notes, activities);
+
+  const section = createSection("Timeline");
+  const focus = renderNextActionFocus(context, activities);
+  if (focus) section.appendChild(focus);
+
+  if (!items.length) {
+    section.appendChild(renderInfo("No timeline items found."));
     return section;
   }
 
-  const list = document.createElement("ul");
-  list.className = "cc-list";
+  items.slice(0, 5).forEach((item) => {
+    const entry = document.createElement("details");
+    entry.className = "cc-tl-item";
 
-  activities.slice(0, 5).forEach((activity) => {
-    list.appendChild(listItem(`${activity.subject} (${activity.dueDate || "no due date"})`));
+    const summary = document.createElement("summary");
+    summary.className = "cc-tl-summary";
+
+    const chip = document.createElement("span");
+    chip.className = `cc-tl-chip cc-tl-chip-${item.kind}`;
+    chip.textContent = item.kindLabel;
+
+    const title = document.createElement("span");
+    title.className = "cc-tl-title";
+    title.textContent = item.title;
+
+    const meta = document.createElement("span");
+    meta.className = "cc-tl-time";
+    meta.textContent = item.timeLabel;
+
+    summary.appendChild(chip);
+    summary.appendChild(title);
+    summary.appendChild(meta);
+    entry.appendChild(summary);
+
+    const details = document.createElement("div");
+    details.className = "cc-tl-details";
+    details.textContent = item.details || "No additional details.";
+    entry.appendChild(details);
+
+    section.appendChild(entry);
   });
 
-  section.appendChild(list);
   return section;
 }
 
-function renderNotes(notes) {
-  const section = createSection("Recent notes");
-  if (!notes.length) {
-    section.appendChild(renderInfo("No notes found."));
-    return section;
-  }
-
-  notes.slice(0, 5).forEach((note) => {
-    const card = document.createElement("article");
-    card.className = "cc-card";
-
-    const date = document.createElement("div");
-    date.className = "cc-small-text";
-    date.textContent = `Added: ${formatNoteDate(note.addTime)}`;
-
-    const content = document.createElement("div");
-    content.className = "cc-note-content";
-    content.textContent = note.content || "(empty note)";
-
-    card.appendChild(date);
-    card.appendChild(content);
-    section.appendChild(card);
+function buildTimelineItems(notes, activities) {
+  const noteItems = (notes || []).map((note) => {
+    const clean = normalizeText(note.content || "(empty note)");
+    return {
+      kind: "note",
+      kindLabel: "Note",
+      title: truncateText(clean, 96),
+      details: clean,
+      timestamp: toTimestamp(note.addTime),
+      timeLabel: formatNoteDate(note.addTime)
+    };
   });
 
-  return section;
+  const activityItems = (activities || []).map((activity) => {
+    const rawType = String(activity.type || "activity").toLowerCase();
+    const kind = /call|meeting|email|task|demo|follow/.test(rawType) ? "engagement" : "activity";
+    const kindLabel = kind === "engagement" ? "Engagement" : toTitleCase(rawType || "activity");
+    const title = `${toTitleCase(rawType || "activity")}: ${activity.subject || "No subject"}`;
+    const details = [
+      activity.dueDate ? `Due: ${activity.dueDate}` : "",
+      activity.done ? "Status: done" : "Status: pending",
+      normalizeText(activity.note || "")
+    ].filter(Boolean).join("\n");
+
+    return {
+      kind,
+      kindLabel,
+      title: truncateText(title, 96),
+      details,
+      timestamp: toTimestamp(activity.dueDate),
+      timeLabel: formatNoteDate(activity.dueDate)
+    };
+  });
+
+  return [...noteItems, ...activityItems].sort((a, b) => b.timestamp - a.timestamp);
+}
+
+function renderNextActionFocus(context, activities) {
+  const pending = (activities || [])
+    .filter((item) => !item?.done)
+    .sort((a, b) => toTimestamp(a?.dueDate) - toTimestamp(b?.dueDate));
+
+  const next = pending.find(Boolean);
+  if (!next) return null;
+
+  const focus = document.createElement("article");
+  focus.className = "cc-focus-card";
+
+  const label = document.createElement("div");
+  label.className = "cc-focus-head";
+  label.textContent = "Next action";
+
+  const title = document.createElement("div");
+  title.className = "cc-focus-title";
+  title.textContent = next.subject || `${toTitleCase(next.type || "activity")} follow-up`;
+
+  const meta = document.createElement("div");
+  meta.className = "cc-focus-meta";
+
+  const tag = document.createElement("span");
+  tag.className = "cc-focus-chip cc-focus-chip-priority";
+  tag.textContent = isOverdueDate(next.dueDate) ? "Overdue" : "Next";
+
+  const owner = document.createElement("span");
+  owner.className = "cc-focus-owner";
+  owner.textContent = `${context.person?.ownerName || context.deal?.ownerName || "Owner"} · ${formatNoteDate(next.dueDate)}`;
+
+  meta.appendChild(tag);
+  meta.appendChild(owner);
+
+  focus.appendChild(label);
+  focus.appendChild(title);
+  focus.appendChild(meta);
+  return focus;
 }
 
 function createSection(titleText) {
@@ -616,6 +727,18 @@ function createSection(titleText) {
 function listItem(text) {
   const item = document.createElement("li");
   item.textContent = text;
+  return item;
+}
+
+function labelValueItem(label, value) {
+  const item = document.createElement("li");
+  const labelEl = document.createElement("span");
+  labelEl.className = "cc-kv-label";
+  labelEl.textContent = `${label}: `;
+  const valueEl = document.createElement("span");
+  valueEl.textContent = value || "N/A";
+  item.appendChild(labelEl);
+  item.appendChild(valueEl);
   return item;
 }
 
@@ -806,5 +929,43 @@ function formatNoteDate(value) {
   if (!value) return "Unknown date";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function toTimestamp(value) {
+  if (!value) return 0;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function truncateText(value, maxLen) {
+  const text = String(value || "").trim();
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, maxLen - 1).trim()}…`;
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toTitleCase(value) {
+  return String(value || "")
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function isOverdueDate(value) {
+  if (!value) return false;
+  const date = new Date(`${value}T23:59:59`);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getTime() < Date.now();
 }

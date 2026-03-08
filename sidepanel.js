@@ -139,31 +139,31 @@ async function loadTalkingPoints() {
 
 function renderLinkedInContext() {
   const context = state.linkedinContext || {};
-  const lines = [
-    `Profile URL: ${context.profileUrl || "N/A"}`,
-    `Profile Name: ${context.profileName || "N/A"}`,
-    `Messaging View: ${context.isMessaging ? "Yes" : "No"}`,
-    `Thread: ${context.threadTitle || "N/A"}`
-  ];
-
-  refs.linkedinContext.textContent = lines.join("\n");
+  renderKeyValueCard(refs.linkedinContext, [
+    { label: "Profile URL", value: context.profileUrl || "N/A" },
+    { label: "Profile Name", value: context.profileName || "N/A" },
+    { label: "Messaging View", value: context.isMessaging ? "Yes" : "No" },
+    { label: "Thread", value: context.threadTitle || "N/A" }
+  ]);
 }
 
 function renderMatchCard() {
   const match = state.match || {};
 
   if (!match.person) {
-    refs.matchCard.textContent = `No direct match yet. Strategy: ${match.strategy || "none"}`;
+    renderKeyValueCard(refs.matchCard, [
+      { label: "Match", value: "No direct match yet" },
+      { label: "Strategy", value: match.strategy || "none" }
+    ]);
   } else {
-    const lines = [
-      `Matched person: ${match.person.name} (#${match.person.id})`,
-      `Match strategy: ${match.strategy}`,
-      `DM eligible: ${match.dmEligible ? "Yes" : "No"}`,
-      `Current stage: ${match.currentStage || 1}`,
-      `Sequence: ${match.sequenceId || "(none)"}`
-    ];
-
-    refs.matchCard.textContent = lines.join("\n");
+    renderKeyValueCard(refs.matchCard, [
+      { label: "Matched", value: `${match.person.name} (#${match.person.id})` },
+      { label: "Org", value: match.person.orgName || "N/A" },
+      { label: "Match strategy", value: match.strategy || "N/A" },
+      { label: "DM eligible", value: match.dmEligible ? "Yes" : "No" },
+      { label: "Current stage", value: String(match.currentStage || 1) },
+      { label: "Sequence", value: match.sequenceId || "(none)" }
+    ]);
   }
 
   refs.matchCandidates.innerHTML = "";
@@ -285,7 +285,7 @@ function renderTalkingPoints(preCall = null) {
 
   state.talkingPoints.forEach((cardData) => {
     const card = document.createElement("article");
-    card.className = "sp-template";
+    card.className = "sp-talk-item";
 
     const title = document.createElement("strong");
     title.textContent = cardData.title || "Talking point";
@@ -449,5 +449,25 @@ function sendRuntimeMessage(message) {
 
       resolve(response || { ok: false, error: "No response" });
     });
+  });
+}
+
+function renderKeyValueCard(container, rows) {
+  if (!container) return;
+  container.innerHTML = "";
+  rows.forEach((row) => {
+    const line = document.createElement("div");
+    line.className = "sp-kv-line";
+
+    const label = document.createElement("span");
+    label.className = "sp-kv-label";
+    label.textContent = `${row.label}: `;
+
+    const value = document.createElement("span");
+    value.textContent = row.value || "N/A";
+
+    line.appendChild(label);
+    line.appendChild(value);
+    container.appendChild(line);
   });
 }

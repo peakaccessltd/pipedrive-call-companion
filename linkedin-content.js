@@ -102,6 +102,20 @@ function injectShadowWidget() {
 
   const style = document.createElement("style");
   style.textContent = `
+    :host {
+      --pa-font: "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      --pa-bg: #f4f7fb;
+      --pa-surface: #ffffff;
+      --pa-surface-soft: #f8fafc;
+      --pa-border: #d9e1ec;
+      --pa-text: #1d2a3a;
+      --pa-text-muted: #5f6f86;
+      --pa-primary: #0a5bd8;
+      --pa-primary-strong: #0849ae;
+      --pa-danger: #c2415d;
+      --pa-success: #1e8e5a;
+    }
+
     *, *::before, *::after {
       box-sizing: border-box;
     }
@@ -113,7 +127,7 @@ function injectShadowWidget() {
       transform: translateY(-50%);
       z-index: 2147483647 !important;
       pointer-events: auto;
-      font-family: "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font-family: var(--pa-font);
       display: block;
       background: transparent;
       color: #fff;
@@ -124,18 +138,19 @@ function injectShadowWidget() {
     }
 
     .${SHADOW_WRAPPER_CLASS} button {
-      border: 1px solid rgba(214, 106, 43, 0.74);
+      border: 1px solid #0a4bb0;
       border-right: 0;
       border-radius: 10px 0 0 10px;
-      min-width: 36px;
-      min-height: 52px;
-      padding: 6px 8px;
+      min-width: 38px;
+      min-height: 54px;
+      padding: 7px 8px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
+      letter-spacing: 0.35px;
       cursor: grab;
       color: #fff;
-      background: linear-gradient(180deg, #d66a2b 0%, #b9561d 100%);
-      box-shadow: 0 12px 20px rgba(0, 0, 0, 0.24);
+      background: linear-gradient(180deg, #0a5bd8 0%, #0849ae 100%);
+      box-shadow: 0 12px 20px rgba(9, 57, 130, 0.3);
       white-space: nowrap;
     }
 
@@ -150,10 +165,10 @@ function injectShadowWidget() {
       width: min(460px, 92vw);
       height: 100vh;
       max-height: 100vh;
-      background: linear-gradient(180deg, #f8f6f2 0%, #f1ede6 100%);
-      border: 1px solid #c9c1b6;
+      background: linear-gradient(180deg, #f7faff 0%, var(--pa-bg) 100%);
+      border-left: 1px solid var(--pa-border);
       border-radius: 0;
-      box-shadow: 0 18px 30px rgba(0, 0, 0, 0.26);
+      box-shadow: -18px 0 30px rgba(20, 42, 71, 0.18);
       overflow: hidden;
       display: flex;
       z-index: 2147483647 !important;
@@ -176,22 +191,23 @@ function injectShadowWidget() {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
-      background: #4b4741;
-      color: #fff;
-      font-size: 15px;
-      font-weight: 700;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--pa-border);
+      background: #ffffff;
+      color: #0f2239;
+      font-size: 18px;
+      font-weight: 800;
       letter-spacing: 0.2px;
     }
 
     .pa-drawer-header button {
-      border: 0;
+      border: 1px solid var(--pa-border);
       border-radius: 10px;
-      background: #f5f1ea;
-      color: #4b4741;
+      background: var(--pa-surface-soft);
+      color: #334a65;
       font-size: 14px;
       font-weight: 700;
-      padding: 5px 9px;
+      padding: 9px 11px;
       cursor: pointer;
     }
 
@@ -200,18 +216,25 @@ function injectShadowWidget() {
       min-height: 0;
       overflow: auto;
       overscroll-behavior: contain;
-      padding: 11px;
+      padding: 12px 14px 18px;
       font-size: 14px;
-      color: #2c2a27;
+      color: var(--pa-text);
       display: grid;
-      gap: 11px;
+      gap: 12px;
       background: transparent;
     }
 
     .pa-section {
       display: grid;
-      gap: 6px;
+      gap: 8px;
       min-width: 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e6edf5;
+    }
+
+    .pa-section:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
     }
 
     .pa-section-head {
@@ -223,18 +246,19 @@ function injectShadowWidget() {
 
     .pa-section h3 {
       margin: 0;
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 0.65px;
-      color: #5c5852;
-      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--pa-text-muted);
+      font-weight: 800;
     }
 
     .pa-card {
-      border: 1px solid #c9c1b6;
-      border-radius: 12px;
-      background: #fff;
-      padding: 9px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      font-size: 13px;
       white-space: pre-wrap;
       line-height: 1.45;
       min-width: 0;
@@ -245,12 +269,13 @@ function injectShadowWidget() {
     .pa-input, .pa-select, .pa-textarea {
       width: 100%;
       max-width: 100%;
-      border: 1px solid #c9c1b6;
-      border-radius: 8px;
+      border: 1px solid var(--pa-border);
+      border-radius: 10px;
       background: #fff;
       padding: 9px;
       font-size: 14px;
-      font-family: "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      color: var(--pa-text);
+      font-family: var(--pa-font);
       min-width: 0;
     }
 
@@ -286,10 +311,10 @@ function injectShadowWidget() {
     }
 
     .pa-item {
-      border: 1px solid #c9c1b6;
-      border-radius: 10px;
-      background: #fff;
-      padding: 9px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
       display: grid;
       gap: 7px;
       min-width: 0;
@@ -297,30 +322,50 @@ function injectShadowWidget() {
       word-break: break-word;
     }
 
+    .pa-talk-item {
+      padding: 2px 0 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #e6edf5;
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .pa-talk-item:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
     .pa-item button, .pa-row button, .pa-top-actions button {
       border: 1px solid transparent;
-      border-radius: 8px;
-      padding: 8px 10px;
+      border-radius: 10px;
+      padding: 9px 11px;
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
-      font-family: "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-      transition: background 120ms ease, transform 120ms ease;
+      font-family: var(--pa-font);
+      transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
     }
 
     .pa-primary {
-      background: #d66a2b;
+      background: linear-gradient(180deg, var(--pa-primary) 0%, var(--pa-primary-strong) 100%);
       color: #fff;
+      box-shadow: 0 8px 14px rgba(10, 91, 216, 0.22);
     }
 
     .pa-secondary {
-      background: #f2efea;
-      color: #4b4741;
-      border-color: #c9c1b6;
+      background: var(--pa-surface-soft);
+      color: #334a65;
+      border-color: var(--pa-border);
     }
 
-    .pa-primary:hover, .pa-secondary:hover {
+    .pa-primary:hover {
       transform: translateY(-1px);
+    }
+
+    .pa-secondary:hover {
+      background: #eef4fb;
     }
 
     .pa-top-actions {
@@ -332,14 +377,26 @@ function injectShadowWidget() {
     .pa-drawer-brand {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
 
     .pa-drawer-logo {
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
       object-fit: contain;
       flex: 0 0 auto;
+    }
+
+    .pa-kv-line {
+      margin-bottom: 3px;
+    }
+
+    .pa-kv-line:last-child {
+      margin-bottom: 0;
+    }
+
+    .pa-kv-label {
+      font-weight: 700;
     }
   `;
 
@@ -856,7 +913,7 @@ async function loadFallbackTalkingPoints(drawer) {
 
   cards.forEach((cardData) => {
     const item = document.createElement("div");
-    item.className = "pa-item";
+    item.className = "pa-talk-item";
 
     const title = document.createElement("strong");
     title.textContent = cardData.title || "Talking point";
@@ -937,23 +994,33 @@ function syncFallbackTalkingVisibility(drawer) {
 
 function renderContextCard(drawer, text) {
   const card = drawer.querySelector("#paContextCard");
-  if (card) card.textContent = text;
+  if (!card) return;
+  const lines = String(text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const idx = line.indexOf(":");
+      if (idx <= 0) return { label: "Info", value: line };
+      return { label: line.slice(0, idx), value: line.slice(idx + 1).trim() };
+    });
+  renderPaKeyValueCard(card, lines);
 }
 
 function renderMatch(drawer, person, candidates, errorText) {
   const matchCard = drawer.querySelector("#paMatchCard");
   if (matchCard) {
     if (errorText) {
-      matchCard.textContent = errorText;
+      renderPaKeyValueCard(matchCard, [{ label: "Status", value: errorText }]);
     } else if (!person) {
-      matchCard.textContent = "No direct match found.";
+      renderPaKeyValueCard(matchCard, [{ label: "Match", value: "No direct match found." }]);
     } else {
-      matchCard.textContent = [
-        `Matched: ${person.name} (#${person.id})`,
-        `Org: ${person.orgName || "N/A"}`,
-        `DM eligible: ${STATE.fallback.match?.dmEligible ? "Yes" : "No"}`,
-        `Current stage: ${STATE.fallback.match?.currentStage || 1}`
-      ].join("\n");
+      renderPaKeyValueCard(matchCard, [
+        { label: "Matched", value: `${person.name} (#${person.id})` },
+        { label: "Org", value: person.orgName || "N/A" },
+        { label: "DM eligible", value: STATE.fallback.match?.dmEligible ? "Yes" : "No" },
+        { label: "Current stage", value: String(STATE.fallback.match?.currentStage || 1) }
+      ]);
     }
   }
 
@@ -1011,7 +1078,7 @@ function setFallbackStatus(message, isError = false) {
 function setMatchCardMessage(drawer, message) {
   const card = drawer.querySelector("#paMatchCard");
   if (!card) return;
-  card.textContent = message;
+  renderPaKeyValueCard(card, [{ label: "Status", value: message }]);
 }
 
 function inferNameFromProfileUrl(profileUrl) {
@@ -1041,6 +1108,26 @@ function sendRuntimeMessage(message) {
       }
       resolve(response || { ok: false, error: "No response." });
     });
+  });
+}
+
+function renderPaKeyValueCard(container, rows) {
+  if (!container) return;
+  container.innerHTML = "";
+  rows.forEach((row) => {
+    const line = document.createElement("div");
+    line.className = "pa-kv-line";
+
+    const label = document.createElement("span");
+    label.className = "pa-kv-label";
+    label.textContent = `${row.label}: `;
+
+    const value = document.createElement("span");
+    value.textContent = row.value || "N/A";
+
+    line.appendChild(label);
+    line.appendChild(value);
+    container.appendChild(line);
   });
 }
 

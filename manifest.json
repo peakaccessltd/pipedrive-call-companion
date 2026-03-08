@@ -9,6 +9,8 @@
     "https://gmail.googleapis.com/*",
     "https://www.linkedin.com/*",
     "https://*.linkedin.com/*",
+    "https://backend-gray-theta-93.vercel.app/*",
+    "https://*.vercel.app/*",
     "http://localhost:8787/*"
   ],
   "background": {

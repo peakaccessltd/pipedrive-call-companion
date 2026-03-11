@@ -669,7 +669,7 @@ function renderAdminHtml() {
         });
       }
 
-      function renderTemplateCard(sequence, template, sequenceIndex, templateIndex) {
+      function renderTemplateCard(sequence, template, _sequenceIndex, templateIndex) {
         const card = document.createElement("article");
         card.className = "template-card";
 
@@ -686,8 +686,57 @@ function renderAdminHtml() {
           sequence.templates.splice(templateIndex, 1);
           renderAll();
         });
+
+        const duplicateBtn = document.createElement("button");
+        duplicateBtn.type = "button";
+        duplicateBtn.className = "btn-secondary";
+        duplicateBtn.textContent = "Duplicate";
+        duplicateBtn.addEventListener("click", () => {
+          const nextStage = sequence.templates.reduce((max, t) => Math.max(max, Number(t.stage || 0)), 0) + 1;
+          sequence.templates.splice(templateIndex + 1, 0, {
+            id: nextLocalId("template"),
+            stage: nextStage,
+            label: String(template.label || "Message") + " Copy",
+            body: String(template.body || "")
+          });
+          renderAll();
+        });
+
+        const moveUpBtn = document.createElement("button");
+        moveUpBtn.type = "button";
+        moveUpBtn.className = "btn-secondary";
+        moveUpBtn.textContent = "Up";
+        moveUpBtn.disabled = templateIndex === 0;
+        moveUpBtn.addEventListener("click", () => {
+          if (templateIndex <= 0) return;
+          const current = sequence.templates[templateIndex];
+          sequence.templates[templateIndex] = sequence.templates[templateIndex - 1];
+          sequence.templates[templateIndex - 1] = current;
+          renderAll();
+        });
+
+        const moveDownBtn = document.createElement("button");
+        moveDownBtn.type = "button";
+        moveDownBtn.className = "btn-secondary";
+        moveDownBtn.textContent = "Down";
+        moveDownBtn.disabled = templateIndex >= sequence.templates.length - 1;
+        moveDownBtn.addEventListener("click", () => {
+          if (templateIndex >= sequence.templates.length - 1) return;
+          const current = sequence.templates[templateIndex];
+          sequence.templates[templateIndex] = sequence.templates[templateIndex + 1];
+          sequence.templates[templateIndex + 1] = current;
+          renderAll();
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        actions.appendChild(moveUpBtn);
+        actions.appendChild(moveDownBtn);
+        actions.appendChild(duplicateBtn);
+        actions.appendChild(removeBtn);
+
         head.appendChild(title);
-        head.appendChild(removeBtn);
+        head.appendChild(actions);
         card.appendChild(head);
 
         const fields = document.createElement("div");

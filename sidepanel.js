@@ -5,21 +5,19 @@ const refs = {
   matchCandidates: document.getElementById("matchCandidates"),
   templateSelect: document.getElementById("templateSelect"),
   stageInput: document.getElementById("stageInput"),
+  templatePreview: document.getElementById("templatePreview"),
   useTemplateBtn: document.getElementById("useTemplateBtn"),
   logAdvanceBtn: document.getElementById("logAdvanceBtn"),
   status: document.getElementById("status")
 };
 
-const TEMPLATE_OPTIONS = [
-  { id: "touch_1", label: "Template 1: Intro" },
-  { id: "touch_2", label: "Template 2: Value" },
-  { id: "touch_3", label: "Template 3: Close Loop" }
-];
-
 const state = {
   linkedinContext: null,
   match: null,
-  selectedTemplateId: TEMPLATE_OPTIONS[0].id,
+  sequences: [],
+  templates: [],
+  selectedSequenceId: "",
+  selectedTemplateId: "",
   stage: 1
 };
 
@@ -65,18 +63,13 @@ async function refreshAll() {
     renderMatchCard();
   }
 
+  await loadSequences();
+  await loadTemplates();
   setStatus("LinkedIn Mode ready.", false, true);
 }
 
 function initTemplateSelect() {
   refs.templateSelect.innerHTML = "";
-  TEMPLATE_OPTIONS.forEach((template) => {
-    const option = document.createElement("option");
-    option.value = template.id;
-    option.textContent = template.label;
-    refs.templateSelect.appendChild(option);
-  });
-  refs.templateSelect.value = state.selectedTemplateId;
 }
 
 function renderLinkedInContext() {
@@ -143,47 +136,20 @@ function renderMatchCard() {
 }
 
 function onTemplateChanged() {
-  state.selectedTemplateId = refs.templateSelect.value || TEMPLATE_OPTIONS[0].id;
+  state.selectedSequenceId = refs.templateSelect.value || "";
+  loadTemplates();
 }
 
 function onStageChanged() {
   const stage = Number(refs.stageInput.value || 1);
   state.stage = Number.isFinite(stage) && stage > 0 ? stage : 1;
   refs.stageInput.value = String(state.stage);
+  loadTemplates();
 }
 
 function getSelectedTemplateText() {
-  return buildTemplateMessage({
-    templateId: state.selectedTemplateId,
-    stage: state.stage,
-    context: state.linkedinContext,
-    match: state.match
-  });
-}
-
-function buildTemplateMessage({ templateId, stage, context, match }) {
-  const personName = match?.person?.name || context?.profileName || "there";
-  const firstName = String(personName).split(/\s+/)[0] || "there";
-  const org = match?.person?.orgName || "your team";
-
-  const intros = {
-    1: "quick intro",
-    2: "follow-up",
-    3: "value add",
-    4: "close loop"
-  };
-
-  const stageTone = intros[stage] || `stage ${stage} follow-up`;
-
-  if (templateId === "touch_2") {
-    return `Hi ${firstName}, sharing one idea for ${org} based on our ${stageTone}. If useful, I can send a short 2-step outline.`;
-  }
-
-  if (templateId === "touch_3") {
-    return `Hi ${firstName}, just closing the loop on our ${stageTone}. If this is still relevant for ${org}, happy to align on next steps.`;
-  }
-
-  return `Hi ${firstName}, thanks for connecting. Reaching out as a ${stageTone} for ${org}. Open to a quick exchange this week?`;
+  const template = state.templates.find((item) => item.id === state.selectedTemplateId) || state.templates[0];
+  return interpolateTemplate(template?.body || "");
 }
 
 async function onInsertTemplate() {
@@ -232,8 +198,8 @@ async function onLogAndAdvance() {
     payload: {
       personId: state.match.person.id,
       profileUrl: state.linkedinContext?.profileUrl || "",
-      sequenceId: "manual_template_flow",
-      templateId: state.selectedTemplateId,
+      sequenceId: state.selectedSequenceId || "manual_template_flow",
+      templateId: state.selectedTemplateId || "manual",
       dmText,
       currentStage: Number(refs.stageInput.value || state.stage || 1)
     }
@@ -253,6 +219,119 @@ async function onLogAndAdvance() {
   }
 
   setStatus(`Logged activity + note and advanced to stage ${resp.data.nextStage}.`, false, true);
+}
+
+async function loadSequences() {
+  const resp = await sendRuntimeMessage({ type: "LINKEDIN_GET_SEQUENCES" });
+  if (!resp.ok) {
+    state.sequences = [];
+    renderSequenceSelect();
+    setStatus(resp.error || "Could not load sequences.", true);
+    return;
+  }
+
+  state.sequences = Array.isArray(resp.data?.sequences) ? resp.data.sequences : [];
+  if (!state.selectedSequenceId) {
+    const matchSequenceId = String(state.match?.sequenceId || "").trim();
+    if (matchSequenceId && state.sequences.some((item) => item.id === matchSequenceId)) {
+      state.selectedSequenceId = matchSequenceId;
+    }
+  }
+  if (!state.selectedSequenceId || !state.sequences.some((item) => item.id === state.selectedSequenceId)) {
+    state.selectedSequenceId = state.sequences[0]?.id || "";
+  }
+  renderSequenceSelect();
+}
+
+async function loadTemplates() {
+  if (!state.selectedSequenceId) {
+    state.templates = [];
+    state.selectedTemplateId = "";
+    renderTemplatePreview();
+    return;
+  }
+
+  const resp = await sendRuntimeMessage({
+    type: "LINKEDIN_GET_TEMPLATES",
+    payload: {
+      sequenceId: state.selectedSequenceId,
+      stage: state.stage
+    }
+  });
+
+  if (!resp.ok) {
+    state.templates = [];
+    state.selectedTemplateId = "";
+    renderTemplatePreview();
+    setStatus(resp.error || "Could not load templates for selected stage.", true);
+    return;
+  }
+
+  state.templates = Array.isArray(resp.data?.templates) ? resp.data.templates : [];
+  const selected = state.templates.find((item) => item.id === state.selectedTemplateId) || state.templates[0];
+  state.selectedTemplateId = selected?.id || "";
+  renderTemplatePreview();
+}
+
+function renderSequenceSelect() {
+  refs.templateSelect.innerHTML = "";
+  state.sequences.forEach((sequence) => {
+    const option = document.createElement("option");
+    option.value = sequence.id;
+    option.textContent = sequence.name || sequence.id;
+    refs.templateSelect.appendChild(option);
+  });
+  refs.templateSelect.value = state.selectedSequenceId || "";
+}
+
+function renderTemplatePreview() {
+  refs.templatePreview.innerHTML = "";
+  if (!state.templates.length) {
+    const empty = document.createElement("div");
+    empty.className = "sp-card";
+    empty.textContent = "No templates found for this sequence/stage.";
+    refs.templatePreview.appendChild(empty);
+    return;
+  }
+
+  state.templates.forEach((template) => {
+    const item = document.createElement("div");
+    item.className = "sp-template";
+
+    const title = document.createElement("strong");
+    title.textContent = template.label || template.id || "Template";
+    item.appendChild(title);
+
+    const body = document.createElement("div");
+    body.className = "sp-card";
+    body.textContent = interpolateTemplate(template.body || "");
+    item.appendChild(body);
+
+    const useBtn = document.createElement("button");
+    useBtn.className = "sp-btn sp-btn-secondary";
+    useBtn.type = "button";
+    useBtn.textContent = "Use Template";
+    useBtn.addEventListener("click", () => {
+      state.selectedTemplateId = template.id;
+      onInsertTemplate();
+    });
+    item.appendChild(useBtn);
+
+    refs.templatePreview.appendChild(item);
+  });
+}
+
+function interpolateTemplate(rawBody) {
+  const personName = state.match?.person?.name || state.linkedinContext?.profileName || "there";
+  const firstName = String(personName).split(/\s+/)[0] || "there";
+  const orgName = state.match?.person?.orgName || "your team";
+
+  return String(rawBody || "")
+    .replace(/\{\{\s*personFirstName\s*\}\}/g, firstName)
+    .replace(/\{\{\s*personName\s*\}\}/g, personName)
+    .replace(/\{\{\s*orgName\s*\}\}/g, orgName)
+    .replace(/\{\{\s*useCaseOrDeal\s*\}\}/g, "your current initiative")
+    .replace(/\{\{\s*valueHook\s*\}\}/g, "a practical next step");
 }
 
 function setStatus(message, isError = false, isSuccess = false) {

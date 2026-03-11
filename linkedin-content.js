@@ -2,11 +2,6 @@ const HOST_ID = "peak-access-linkedin-host";
 const SHADOW_WRAPPER_CLASS = "pa-linkedin-wrapper";
 const LINKEDIN_LAUNCHER_TOP_KEY = "linkedInModeLauncherTop";
 const LINKEDIN_PENDING_TEMPLATE_KEY = "pa_pending_linkedin_template_text";
-const LINKEDIN_TEMPLATE_OPTIONS = [
-  { id: "touch_1", label: "Template 1: Intro" },
-  { id: "touch_2", label: "Template 2: Value" },
-  { id: "touch_3", label: "Template 3: Close Loop" }
-];
 const STATE = {
   mounted: false,
   shadowRoot: null,
@@ -25,8 +20,10 @@ const STATE = {
     context: null,
     match: null,
     candidates: [],
+    sequences: [],
+    selectedSequenceId: "",
     templates: [],
-    selectedTemplateId: "touch_1",
+    selectedTemplateId: "",
     selectedTemplate: null,
     stage: 1
   },
@@ -611,7 +608,7 @@ function updateDrawerState() {
 function wireFallbackEvents(drawer) {
   drawer.querySelector("#paRefreshBtn")?.addEventListener("click", () => refreshFallbackData());
   drawer.querySelector("#paTemplateSelect")?.addEventListener("change", async (event) => {
-    STATE.fallback.selectedTemplateId = String(event.target?.value || LINKEDIN_TEMPLATE_OPTIONS[0].id);
+    STATE.fallback.selectedSequenceId = String(event.target?.value || "");
     await loadFallbackTemplates();
   });
   drawer.querySelector("#paStageInput")?.addEventListener("change", async (event) => {
@@ -663,7 +660,7 @@ function wireFallbackEvents(drawer) {
       payload: {
         personId,
         profileUrl: STATE.fallback.context?.profileUrl || "",
-        sequenceId: "manual_template_flow",
+        sequenceId: STATE.fallback.selectedSequenceId || "manual_template_flow",
         templateId: STATE.fallback.selectedTemplate?.id || "manual",
         dmText,
         currentStage: Number(STATE.fallback.stage || 1)
@@ -795,26 +792,76 @@ async function refreshFallbackData() {
       await runFallbackPersonSearch(drawer);
     }
 
+    await loadFallbackSequences();
     await loadFallbackTemplates();
   }
-  renderTemplateSelect(drawer);
+  await loadFallbackSequences();
   await loadFallbackTemplates();
   setFallbackStatus("Ready.");
+}
+
+async function loadFallbackSequences() {
+  const drawer = STATE.shadowRoot?.getElementById("pa-linkedin-drawer");
+  if (!drawer) return;
+
+  const response = await sendRuntimeMessage({ type: "LINKEDIN_GET_SEQUENCES" });
+  if (!response.ok) {
+    STATE.fallback.sequences = [];
+    renderTemplateSelect(drawer);
+    setFallbackStatus(response.error || "Failed to load sequences.", true);
+    return;
+  }
+
+  const sequences = Array.isArray(response.data?.sequences) ? response.data.sequences : [];
+  STATE.fallback.sequences = sequences;
+  if (!STATE.fallback.selectedSequenceId) {
+    const matchedSequenceId = String(STATE.fallback.match?.sequenceId || "").trim();
+    if (matchedSequenceId && sequences.some((item) => item.id === matchedSequenceId)) {
+      STATE.fallback.selectedSequenceId = matchedSequenceId;
+    }
+  }
+  if (!STATE.fallback.selectedSequenceId || !sequences.some((item) => item.id === STATE.fallback.selectedSequenceId)) {
+    STATE.fallback.selectedSequenceId = sequences[0]?.id || "";
+  }
+  renderTemplateSelect(drawer);
 }
 
 async function loadFallbackTemplates() {
   const drawer = STATE.shadowRoot?.getElementById("pa-linkedin-drawer");
   if (!drawer) return;
   const stage = Number(STATE.fallback.stage || 1);
-  STATE.fallback.templates = LINKEDIN_TEMPLATE_OPTIONS.map((template) => ({
-    id: template.id,
-    stage,
-    label: template.label,
-    body: buildLinkedInStageTemplate(template.id, stage)
-  }));
+
+  if (!STATE.fallback.selectedSequenceId) {
+    STATE.fallback.templates = [];
+    STATE.fallback.selectedTemplate = null;
+    renderTemplates(drawer);
+    return;
+  }
+
+  const response = await sendRuntimeMessage({
+    type: "LINKEDIN_GET_TEMPLATES",
+    payload: {
+      sequenceId: STATE.fallback.selectedSequenceId,
+      stage
+    }
+  });
+
+  if (!response.ok) {
+    STATE.fallback.templates = [];
+    STATE.fallback.selectedTemplate = null;
+    renderTemplates(drawer);
+    setFallbackStatus(response.error || "Failed to load templates.", true);
+    return;
+  }
+
+  STATE.fallback.templates = Array.isArray(response.data?.templates) ? response.data.templates : [];
   renderTemplates(drawer);
-  const selected = STATE.fallback.templates.find((item) => item.id === STATE.fallback.selectedTemplateId) || STATE.fallback.templates[0];
+  const selected = STATE.fallback.templates.find((item) => item.id === STATE.fallback.selectedTemplateId)
+    || STATE.fallback.templates[0];
   STATE.fallback.selectedTemplate = selected || null;
+  if (selected?.id) {
+    STATE.fallback.selectedTemplateId = selected.id;
+  }
 }
 
 
@@ -822,37 +869,13 @@ function renderTemplateSelect(drawer) {
   const select = drawer.querySelector("#paTemplateSelect");
   if (!select) return;
   select.innerHTML = "";
-  LINKEDIN_TEMPLATE_OPTIONS.forEach((template) => {
+  STATE.fallback.sequences.forEach((sequence) => {
     const option = document.createElement("option");
-    option.value = template.id;
-    option.textContent = template.label;
+    option.value = sequence.id;
+    option.textContent = sequence.name || sequence.id;
     select.appendChild(option);
   });
-  select.value = STATE.fallback.selectedTemplateId || LINKEDIN_TEMPLATE_OPTIONS[0].id;
-}
-
-function buildLinkedInStageTemplate(templateId, stage) {
-  const stageNum = Number(stage || 1);
-  const stageText = stageNum === 1
-    ? "quick intro"
-    : stageNum === 2
-      ? "follow-up"
-      : stageNum === 3
-        ? "value add"
-        : "close loop";
-
-  if (templateId === "touch_2") {
-    return "Hi {{personFirstName}}, sharing one idea for {{orgName}} based on our " +
-      `${stageText}. If useful, I can send a short 2-step outline.`;
-  }
-
-  if (templateId === "touch_3") {
-    return "Hi {{personFirstName}}, just closing the loop on our " +
-      `${stageText}. If this is still relevant for {{orgName}}, happy to align on next steps.`;
-  }
-
-  return "Hi {{personFirstName}}, thanks for connecting. Reaching out as a " +
-    `${stageText} for {{orgName}}. Open to a quick exchange this week?`;
+  select.value = STATE.fallback.selectedSequenceId || "";
 }
 
 function renderTemplates(drawer) {

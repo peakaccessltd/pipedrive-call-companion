@@ -448,9 +448,34 @@ function renderAdminHtml() {
         align-items: center;
         margin-bottom: 10px;
       }
+      .sequence-head-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
       .sequence-title {
         margin: 0;
         font-size: 16px;
+        cursor: pointer;
+      }
+      .sequence-toggle {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+        font-weight: 800;
+        cursor: pointer;
+        padding: 0;
+      }
+      .sequence-body {
+        display: grid;
+        gap: 0;
+      }
+      .sequence-body-collapsed {
+        display: none;
       }
       .grid {
         display: grid;
@@ -544,6 +569,7 @@ function renderAdminHtml() {
       const saveBtn = document.getElementById("saveBtn");
       let state = { version: 1, updated_at: null, sequences: [] };
       let localCounter = 0;
+      const expandedSequences = Object.create(null);
 
       function setStatus(msg, ok = true) {
         statusEl.textContent = msg;
@@ -585,6 +611,24 @@ function renderAdminHtml() {
         return templates;
       }
 
+      function getSequenceUiKey(sequence, index) {
+        if (sequence && sequence._uiKey) return sequence._uiKey;
+        const base = String(sequence?.id || "").trim() || ("sequence-" + index);
+        if (sequence) {
+          sequence._uiKey = base + "-" + nextLocalId("ui");
+          return sequence._uiKey;
+        }
+        return base + "-" + nextLocalId("ui");
+      }
+
+      function setSequenceExpanded(uiKey, expanded) {
+        expandedSequences[uiKey] = Boolean(expanded);
+      }
+
+      function isSequenceExpanded(uiKey) {
+        return Boolean(expandedSequences[uiKey]);
+      }
+
       function renderAll() {
         sequencesRoot.innerHTML = "";
         if (!Array.isArray(state.sequences) || state.sequences.length === 0) {
@@ -597,14 +641,40 @@ function renderAdminHtml() {
 
         state.sequences.forEach((sequence, sequenceIndex) => {
           ensureTemplateMinimum(sequence);
+          const uiKey = getSequenceUiKey(sequence, sequenceIndex);
+          if (expandedSequences[uiKey] === undefined) {
+            setSequenceExpanded(uiKey, false);
+          }
           const card = document.createElement("section");
           card.className = "sequence-card";
 
           const head = document.createElement("div");
           head.className = "sequence-head";
+          const headLeft = document.createElement("div");
+          headLeft.className = "sequence-head-left";
+          const toggle = document.createElement("button");
+          toggle.type = "button";
+          toggle.className = "sequence-toggle";
+          toggle.textContent = isSequenceExpanded(uiKey) ? "-" : "+";
           const h = document.createElement("h2");
           h.className = "sequence-title";
           h.textContent = sequence.name || "Untitled Sequence";
+          h.title = "Click to expand/collapse";
+          const toggleExpanded = () => {
+            setSequenceExpanded(uiKey, !isSequenceExpanded(uiKey));
+            renderAll();
+          };
+          toggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleExpanded();
+          });
+          h.addEventListener("click", (event) => {
+            event.preventDefault();
+            toggleExpanded();
+          });
+          headLeft.appendChild(toggle);
+          headLeft.appendChild(h);
           const removeSequenceBtn = document.createElement("button");
           removeSequenceBtn.type = "button";
           removeSequenceBtn.className = "btn-danger";
@@ -613,10 +683,12 @@ function renderAdminHtml() {
             state.sequences.splice(sequenceIndex, 1);
             renderAll();
           });
-          head.appendChild(h);
+          head.appendChild(headLeft);
           head.appendChild(removeSequenceBtn);
           card.appendChild(head);
 
+          const bodyWrap = document.createElement("div");
+          bodyWrap.className = "sequence-body" + (isSequenceExpanded(uiKey) ? "" : " sequence-body-collapsed");
           const grid = document.createElement("div");
           grid.className = "grid";
 
@@ -634,17 +706,17 @@ function renderAdminHtml() {
             sequence.description = v;
           }));
 
-          card.appendChild(grid);
+          bodyWrap.appendChild(grid);
           const divider = document.createElement("div");
           divider.className = "divider";
-          card.appendChild(divider);
+          bodyWrap.appendChild(divider);
 
           const templatesWrap = document.createElement("div");
           templatesWrap.className = "templates";
           sequence.templates.forEach((template, templateIndex) => {
             templatesWrap.appendChild(renderTemplateCard(sequence, template, sequenceIndex, templateIndex));
           });
-          card.appendChild(templatesWrap);
+          bodyWrap.appendChild(templatesWrap);
 
           const actions = document.createElement("div");
           actions.className = "actions";
@@ -663,7 +735,8 @@ function renderAdminHtml() {
             renderAll();
           });
           actions.appendChild(addTemplateBtn);
-          card.appendChild(actions);
+          bodyWrap.appendChild(actions);
+          card.appendChild(bodyWrap);
 
           sequencesRoot.appendChild(card);
         });
@@ -876,9 +949,12 @@ function renderAdminHtml() {
       }
 
       function addSequence() {
+        if (!Array.isArray(state.sequences)) {
+          state.sequences = [];
+        }
         const sequenceNumber = (state.sequences?.length || 0) + 1;
         const sequenceId = nextLocalId("sequence");
-        state.sequences.push({
+        const nextSequence = {
           id: sequenceId,
           name: "Sequence " + sequenceNumber,
           description: "",
@@ -888,7 +964,10 @@ function renderAdminHtml() {
             { id: nextLocalId("template"), stage: 2, label: "Stage 2 Follow-up", body: "Hi {{personFirstName}}, following up..." },
             { id: nextLocalId("template"), stage: 3, label: "Stage 3 Close Loop", body: "Hi {{personFirstName}}, closing the loop..." }
           ]
-        });
+        };
+        const uiKey = getSequenceUiKey(nextSequence, state.sequences.length);
+        setSequenceExpanded(uiKey, true);
+        state.sequences.push(nextSequence);
         renderAll();
         setStatus("Added new sequence.");
       }

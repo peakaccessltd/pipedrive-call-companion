@@ -47,7 +47,7 @@ It provides:
 - Google Chrome (current)
 - Pipedrive API token
 - (Optional) Gmail OAuth client configured for extension draft creation
-- Backend deployed (Vercel or Render)
+- Backend deployed (Railway recommended)
 
 ## 1) Load extension (dev/unpacked)
 
@@ -63,7 +63,7 @@ Open extension options from `chrome://extensions` -> extension -> **Extension op
 
 Set at minimum:
 - `Pipedrive API token`
-- `Shared backend base URL` (example: `https://backend-gray-theta-93.vercel.app`)
+- `Shared backend base URL` (example: `https://your-service.up.railway.app`)
 - Person custom field keys:
   - `personLinkedinProfileUrlKey`
   - `personLinkedinDmSequenceIdKey`
@@ -89,13 +89,13 @@ npm run dev
 Health check:
 - `http://localhost:8787/health`
 
-## 4) Deploy backend to Vercel (basic)
+## 4) Deploy backend to Railway (basic)
 
-1. Import repo into Vercel
-2. Set **Root Directory** to `backend`
-3. Framework preset: `Other`
-4. Build command: leave empty
-5. Output directory: leave empty
+1. Create a new Railway project
+2. Connect this GitHub repo
+3. Set **Root Directory** to `backend`
+4. Railway will auto-detect Node and run `npm start`
+5. Deploy and copy the generated public URL (`https://<service>.up.railway.app`)
 
 Set environment variables:
 - `WEBHOOK_SECRET` (required)
@@ -106,7 +106,7 @@ Set environment variables:
 - `CALL_DISPOSITION_TRIGGER_OPTION_ID` (optional, default `6`)
 - `CALL_DISPOSITION_TRIGGER_LABEL` (optional)
 
-### Vercel endpoints
+### Backend endpoints
 
 - `GET /health`
 - `GET /sequences`
@@ -117,7 +117,7 @@ Set environment variables:
 
 ## 5) Pipedrive webhook setup
 
-If your Pipedrive webhook UI cannot send custom headers, use query secret auth:
+If your Pipedrive webhook UI cannot send custom headers, use query-secret auth:
 
 `https://<your-backend>/pipedrive/webhook?secret=<WEBHOOK_SECRET>`
 

@@ -11,6 +11,7 @@
     "https://*.linkedin.com/*",
     "https://backend-gray-theta-93.vercel.app/*",
     "https://*.vercel.app/*",
+    "https://*.up.railway.app/*",
     "http://localhost:8787/*"
   ],
   "background": {

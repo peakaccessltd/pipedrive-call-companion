@@ -10,6 +10,8 @@ export function createApp({ baseDir = process.cwd() } = {}) {
   const PERSON_DM_ELIGIBLE_FIELD_KEY = process.env.PERSON_DM_ELIGIBLE_FIELD_KEY || "";
   const CALL_DISPOSITION_TRIGGER_OPTION_ID = String(process.env.CALL_DISPOSITION_TRIGGER_OPTION_ID || "6");
   const CALL_DISPOSITION_TRIGGER_LABEL = process.env.CALL_DISPOSITION_TRIGGER_LABEL || "LinkedIn Outreach next step";
+  const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "").trim();
+  const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "").trim();
 
   const sequencesPath = path.join(baseDir, "data", "sequences.json");
   const queueStore = createQueueStore({ baseDir });
@@ -38,6 +40,52 @@ export function createApp({ baseDir = process.cwd() } = {}) {
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "peak-access-linkedin-backend", now: new Date().toISOString() });
+  });
+
+  app.get("/admin", (req, res) => {
+    if (!isAdminAuthorized(req, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD })) {
+      res.setHeader("WWW-Authenticate", 'Basic realm="Peak Access Admin"');
+      res.status(401).send("Unauthorized");
+      return;
+    }
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(renderAdminHtml());
+  });
+
+  app.get("/admin/api/sequences", (req, res) => {
+    if (!isAdminAuthorized(req, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD })) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+
+    const data = readJson(sequencesPath, { version: 1, updated_at: null, sequences: [] });
+    res.json({ ok: true, data });
+  });
+
+  app.put("/admin/api/sequences", (req, res) => {
+    if (!isAdminAuthorized(req, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD })) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+
+    const payload = req.body || {};
+    const validationError = validateSequencesPayload(payload);
+    if (validationError) {
+      res.status(400).json({ ok: false, error: validationError });
+      return;
+    }
+
+    const nextValue = {
+      ...payload,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      writeJsonAtomic(sequencesPath, nextValue);
+      res.json({ ok: true, data: nextValue });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: `Failed to save sequences: ${error.message || String(error)}` });
+    }
   });
 
   app.get("/sequences", (_req, res) => {
@@ -247,6 +295,229 @@ function summarizePayload(payload) {
     activity_id: payload?.data?.id || payload?.current?.id || null,
     subject: payload?.data?.subject || payload?.current?.subject || ""
   };
+}
+
+function isAdminAuthorized(req, { username, password }) {
+  if (!username || !password) {
+    return false;
+  }
+  const basic = parseBasicAuth(req.header("authorization"));
+  return basic.username === username && basic.password === password;
+}
+
+function validateSequencesPayload(value) {
+  if (!value || typeof value !== "object") {
+    return "Payload must be a JSON object.";
+  }
+
+  if (!Array.isArray(value.sequences)) {
+    return "Payload must include a sequences array.";
+  }
+
+  for (const sequence of value.sequences) {
+    if (!sequence || typeof sequence !== "object") {
+      return "Each sequence must be an object.";
+    }
+    if (!String(sequence.id || "").trim()) return "Each sequence needs an id.";
+    if (!String(sequence.name || "").trim()) return "Each sequence needs a name.";
+    if (!Array.isArray(sequence.templates)) return `Sequence '${sequence.id}' must include a templates array.`;
+
+    for (const template of sequence.templates) {
+      if (!template || typeof template !== "object") {
+        return `Sequence '${sequence.id}' includes an invalid template entry.`;
+      }
+      if (!String(template.id || "").trim()) return `A template in '${sequence.id}' is missing id.`;
+      if (!Number.isFinite(Number(template.stage))) return `Template '${template.id}' in '${sequence.id}' needs numeric stage.`;
+      if (!String(template.label || "").trim()) return `Template '${template.id}' in '${sequence.id}' needs label.`;
+      if (!String(template.body || "").trim()) return `Template '${template.id}' in '${sequence.id}' needs body.`;
+    }
+  }
+
+  return "";
+}
+
+function writeJsonAtomic(filePath, value) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = `${filePath}.tmp`;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  fs.renameSync(tmpPath, filePath);
+}
+
+function renderAdminHtml() {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Peak Access Admin</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --surface: #ffffff;
+        --border: #d9e1ec;
+        --text: #1d2a3a;
+        --muted: #5f6f86;
+        --primary: #4cae4f;
+        --primary-dark: #449c47;
+        --danger: #b33a3a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Open Sans", "Segoe UI", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 20px auto;
+        padding: 0 16px 32px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+      }
+      .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .hint {
+        color: var(--muted);
+        margin: 0 0 10px;
+        font-size: 13px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 560px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      button {
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: var(--primary);
+        border-color: var(--primary-dark);
+        color: #fff;
+      }
+      .btn-secondary {
+        background: #fff;
+        border-color: var(--border);
+        color: var(--text);
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      .ok { color: #1f7a3b; }
+      .err { color: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="head">
+          <h1>Peak Access Template Admin</h1>
+          <div class="row">
+            <button id="reloadBtn" class="btn-secondary" type="button">Reload</button>
+            <button id="formatBtn" class="btn-secondary" type="button">Format JSON</button>
+            <button id="saveBtn" class="btn-primary" type="button">Save</button>
+          </div>
+        </div>
+        <p class="hint">Edit shared LinkedIn sequences/templates JSON. Changes are saved to <code>backend/data/sequences.json</code>.</p>
+        <textarea id="editor" spellcheck="false"></textarea>
+        <div id="status" class="status"></div>
+      </div>
+    </div>
+    <script>
+      const editor = document.getElementById("editor");
+      const statusEl = document.getElementById("status");
+      const reloadBtn = document.getElementById("reloadBtn");
+      const formatBtn = document.getElementById("formatBtn");
+      const saveBtn = document.getElementById("saveBtn");
+
+      function setStatus(msg, ok = true) {
+        statusEl.textContent = msg;
+        statusEl.className = "status " + (ok ? "ok" : "err");
+      }
+
+      async function loadData() {
+        setStatus("Loading...");
+        const res = await fetch("/admin/api/sequences", { method: "GET" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setStatus(data.error || "Failed to load data.", false);
+          return;
+        }
+        editor.value = JSON.stringify(data.data, null, 2);
+        setStatus("Loaded.");
+      }
+
+      function formatJson() {
+        try {
+          const parsed = JSON.parse(editor.value);
+          editor.value = JSON.stringify(parsed, null, 2);
+          setStatus("Formatted.");
+        } catch (error) {
+          setStatus("Invalid JSON: " + error.message, false);
+        }
+      }
+
+      async function saveData() {
+        let parsed;
+        try {
+          parsed = JSON.parse(editor.value);
+        } catch (error) {
+          setStatus("Invalid JSON: " + error.message, false);
+          return;
+        }
+
+        setStatus("Saving...");
+        const res = await fetch("/admin/api/sequences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsed)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setStatus(data.error || "Save failed.", false);
+          return;
+        }
+        editor.value = JSON.stringify(data.data, null, 2);
+        setStatus("Saved.");
+      }
+
+      reloadBtn.addEventListener("click", loadData);
+      formatBtn.addEventListener("click", formatJson);
+      saveBtn.addEventListener("click", saveData);
+      loadData();
+    </script>
+  </body>
+</html>`;
 }
 
 async function updatePipedriveEligibleFlag({ personId, eligible, baseUrl, apiToken, fieldKey }) {

@@ -1,6 +1,7 @@
 const HOST_ID = "peak-access-linkedin-host";
 const SHADOW_WRAPPER_CLASS = "pa-linkedin-wrapper";
 const LINKEDIN_LAUNCHER_TOP_KEY = "linkedInModeLauncherTop";
+const LINKEDIN_PENDING_TEMPLATE_KEY = "pa_pending_linkedin_template_text";
 const LINKEDIN_TEMPLATE_OPTIONS = [
   { id: "touch_1", label: "Template 1: Intro" },
   { id: "touch_2", label: "Template 2: Value" },
@@ -28,7 +29,8 @@ const STATE = {
     selectedTemplateId: "touch_1",
     selectedTemplate: null,
     stage: 1
-  }
+  },
+  pendingInsertBusy: false
 };
 
 initLinkedInBridge();
@@ -50,14 +52,7 @@ async function handleMessage(message) {
 
   if (type === "LINKEDIN_SET_COMPOSER_TEXT") {
     const text = String(message?.payload?.text || "");
-    const inserted = await setComposerText(text);
-
-    if (!inserted) {
-      const copied = await fallbackCopyToClipboard(text);
-      return { inserted: false, copied };
-    }
-
-    return { inserted: true, copied: false };
+    return await tryInsertWithPending(text);
   }
 
   if (type === "LINKEDIN_GET_COMPOSER_TEXT") {
@@ -80,6 +75,7 @@ function initLinkedInBridge() {
   installLauncherDragHandlers();
   injectShadowWidget();
   watchUrlChanges();
+  startPendingTemplateWatcher();
 }
 
 function injectShadowWidget() {
@@ -505,13 +501,7 @@ function createFallbackDrawer() {
       <div id="paTemplateList" class="pa-list"></div>
     </section>
     <section class="pa-section">
-      <h3>Composer</h3>
-      <textarea id="paDraftText" class="pa-textarea" placeholder="Template text appears here"></textarea>
-      <div class="pa-row">
-        <button id="paInsertBtn" class="pa-primary" type="button">Insert Template</button>
-        <button id="paCopyBtn" class="pa-secondary" type="button">Copy</button>
-        <button id="paLogBtn" class="pa-primary pa-full" type="button">Log & Advance</button>
-      </div>
+      <button id="paLogBtn" class="pa-primary pa-full" type="button">Log & Advance</button>
     </section>
     <section class="pa-section">
       <h3>Status</h3>
@@ -658,28 +648,14 @@ function wireFallbackEvents(drawer) {
       await runConfirmMatch(drawer, personId);
     }
   });
-  drawer.querySelector("#paInsertBtn")?.addEventListener("click", async () => {
-    const text = String(drawer.querySelector("#paDraftText")?.value || "").trim();
-    if (!text) return setFallbackStatus("Select a template first.", true);
-    const ok = await setComposerText(text);
-    if (!ok) {
-      const copied = await fallbackCopyToClipboard(text);
-      return setFallbackStatus(copied ? "Composer unavailable, copied to clipboard." : "Insert failed.", !copied);
-    }
-    setFallbackStatus("Inserted into LinkedIn composer.", false);
-  });
-  drawer.querySelector("#paCopyBtn")?.addEventListener("click", async () => {
-    const text = String(drawer.querySelector("#paDraftText")?.value || "").trim();
-    if (!text) return setFallbackStatus("Nothing to copy.", true);
-    const copied = await fallbackCopyToClipboard(text);
-    setFallbackStatus(copied ? "Copied." : "Copy failed.", !copied);
-  });
   drawer.querySelector("#paLogBtn")?.addEventListener("click", async () => {
     const personId = STATE.fallback.match?.person?.id;
     if (!personId) return setFallbackStatus("No matched person to log against.", true);
 
-    const draftText = String(drawer.querySelector("#paDraftText")?.value || "").trim();
-    const dmText = getComposerText() || draftText;
+    const selectedTemplateText = STATE.fallback.selectedTemplate
+      ? interpolateTemplate(STATE.fallback.selectedTemplate.body)
+      : "";
+    const dmText = getComposerText() || selectedTemplateText;
     if (!dmText) return setFallbackStatus("No message text to log.", true);
 
     const response = await sendRuntimeMessage({
@@ -839,10 +815,6 @@ async function loadFallbackTemplates() {
   renderTemplates(drawer);
   const selected = STATE.fallback.templates.find((item) => item.id === STATE.fallback.selectedTemplateId) || STATE.fallback.templates[0];
   STATE.fallback.selectedTemplate = selected || null;
-  const draft = drawer.querySelector("#paDraftText");
-  if (draft && selected) {
-    draft.value = interpolateTemplate(selected.body);
-  }
 }
 
 
@@ -902,12 +874,21 @@ function renderTemplates(drawer) {
     useBtn.type = "button";
     useBtn.className = "pa-secondary";
     useBtn.textContent = "Use Template";
-    useBtn.addEventListener("click", () => {
+    useBtn.addEventListener("click", async () => {
       STATE.fallback.selectedTemplateId = template.id;
       STATE.fallback.selectedTemplate = template;
-      const draft = drawer.querySelector("#paDraftText");
-      if (draft) draft.value = interpolateTemplate(template.body);
-      setFallbackStatus(`Selected: ${template.label}`);
+      const text = interpolateTemplate(template.body);
+      const result = await tryInsertWithPending(text);
+      if (!result.inserted) {
+        setFallbackStatus(
+          result.message || (result.copied
+            ? "Open a LinkedIn Message composer or Connect note first, then click Use Template. Copied to clipboard."
+            : "Open a LinkedIn Message composer or Connect note first, then click Use Template."),
+          !result.copied
+        );
+        return;
+      }
+      setFallbackStatus(`${template.label} inserted into LinkedIn composer.`);
     });
 
     item.appendChild(useBtn);
@@ -1142,65 +1123,273 @@ function getMessagingThreadTitle() {
   return "";
 }
 
-function getComposerEditable() {
-  const candidates = [
-    "div.msg-form__contenteditable[contenteditable='true']",
-    "div.msg-form__contenteditable[role='textbox']",
-    "div[role='textbox'][contenteditable='true']",
-    ".msg-form__contenteditable",
-    "textarea[name='message']",
-    "textarea.msg-form__contenteditable"
-  ];
-
-  for (const selector of candidates) {
-    const el = document.querySelector(selector);
-    if (el && isVisible(el)) return el;
-  }
-
-  return null;
-}
-
 function isVisible(el) {
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
 }
 
-async function ensureMessageComposerOpen() {
-  const existing = getComposerEditable();
-  if (existing) return existing;
-
-  const triggers = getComposerOpenTriggers();
-  for (const trigger of triggers) {
-    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-    const found = await waitForComposer(1600);
-    if (found) return found;
-  }
-
-  return await waitForComposer(1200);
-}
-
 async function setComposerText(text) {
-  const composer = await ensureMessageComposerOpen();
-  if (!composer) return false;
-
-  composer.focus();
   const nextText = String(text || "").trim();
   if (!nextText) return false;
 
-  if ("value" in composer) {
-    composer.value = nextText;
-    dispatchComposerInputEvents(composer, nextText);
-    return readComposerText(composer).includes(nextText.slice(0, 8));
+  const composer = getComposerEditable(false);
+  if (composer) {
+    return setEditableText(composer, nextText);
   }
 
-  if (tryExecInsert(composer, nextText)) {
-    const current = readComposerText(composer);
+  const opened = await ensureComposerOrNoteOpen();
+  if (opened) {
+    return setEditableText(opened, nextText);
+  }
+
+  const connectNoteInput = findOpenConnectNoteInput(false);
+  if (connectNoteInput) {
+    return setEditableText(connectNoteInput, nextText);
+  }
+
+  return false;
+}
+
+async function tryInsertWithPending(text) {
+  const nextText = String(text || "").trim();
+  if (!nextText) {
+    return { inserted: false, copied: false, pending: false, message: "Template text is empty." };
+  }
+
+  setPendingTemplateText(nextText);
+  const inserted = await setComposerText(nextText);
+  if (inserted) {
+    clearPendingTemplateText(nextText);
+    return { inserted: true, copied: false, pending: false };
+  }
+
+  const copied = await fallbackCopyToClipboard(nextText);
+  return {
+    inserted: false,
+    copied,
+    pending: true,
+    message: copied
+      ? "Waiting for LinkedIn/Sales Navigator composer. Template copied to clipboard as fallback."
+      : "Waiting for LinkedIn/Sales Navigator composer to appear."
+  };
+}
+
+function setPendingTemplateText(text) {
+  try {
+    localStorage.setItem(
+      LINKEDIN_PENDING_TEMPLATE_KEY,
+      JSON.stringify({ text: String(text || ""), ts: Date.now() })
+    );
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+}
+
+function getPendingTemplateText() {
+  try {
+    const raw = localStorage.getItem(LINKEDIN_PENDING_TEMPLATE_KEY);
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    const text = String(parsed?.text || "").trim();
+    return text;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function clearPendingTemplateText(expectedText = "") {
+  try {
+    if (!expectedText) {
+      localStorage.removeItem(LINKEDIN_PENDING_TEMPLATE_KEY);
+      return;
+    }
+    const current = getPendingTemplateText();
+    if (!current || current === String(expectedText || "").trim()) {
+      localStorage.removeItem(LINKEDIN_PENDING_TEMPLATE_KEY);
+    }
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+}
+
+function startPendingTemplateWatcher() {
+  setInterval(async () => {
+    if (STATE.pendingInsertBusy) return;
+    const pendingText = getPendingTemplateText();
+    if (!pendingText) return;
+
+    STATE.pendingInsertBusy = true;
+    try {
+      const inserted = await setComposerText(pendingText);
+      if (inserted) {
+        clearPendingTemplateText(pendingText);
+      }
+    } finally {
+      STATE.pendingInsertBusy = false;
+    }
+  }, 900);
+}
+
+async function ensureComposerOrNoteOpen() {
+  if (isSalesNavigatorPage()) {
+    const salesComposer = await openSalesNavigatorComposer();
+    if (salesComposer) return salesComposer;
+  } else {
+    const linkedinComposer = await openStandardLinkedInMessageComposer();
+    if (linkedinComposer) return linkedinComposer;
+  }
+
+  const connectNote = await openConnectNoteAndGetInput();
+  if (connectNote) return connectNote;
+
+  return null;
+}
+
+function setEditableText(target, nextText) {
+  if (!target || !nextText) return false;
+  target.focus();
+
+  if ("value" in target) {
+    target.value = nextText;
+    dispatchComposerInputEvents(target, nextText);
+    return readComposerText(target).includes(nextText.slice(0, 8));
+  }
+
+  if (tryExecInsert(target, nextText)) {
+    const current = readComposerText(target);
     if (current && current.includes(nextText.slice(0, 8))) return true;
   }
 
-  composer.textContent = nextText;
-  dispatchComposerInputEvents(composer, nextText);
-  return readComposerText(composer).includes(nextText.slice(0, 8));
+  target.textContent = nextText;
+  dispatchComposerInputEvents(target, nextText);
+  return readComposerText(target).includes(nextText.slice(0, 8));
+}
+
+function isSalesNavigatorPage() {
+  return /\/sales\//i.test(String(location.pathname || ""));
+}
+
+async function openStandardLinkedInMessageComposer() {
+  const existing = getComposerEditable(false);
+  if (existing) return existing;
+
+  const triggers = getStandardMessageTriggers();
+  for (const trigger of triggers) {
+    safeClick(trigger);
+    const found = await waitForComposer(1800, false);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+async function openSalesNavigatorComposer() {
+  const existing = getComposerEditable(true);
+  if (existing) return existing;
+
+  const triggers = getSalesNavigatorMessageTriggers();
+  for (const trigger of triggers) {
+    safeClick(trigger);
+    const found = await waitForComposer(2200, true);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function getStandardMessageTriggers() {
+  const allButtons = Array.from(document.querySelectorAll("main button, main a[role='button'], main a"));
+  return dedupeNodes(allButtons.filter((el) => {
+    if (!isVisible(el)) return false;
+    const text = normalizeText(el.textContent);
+    const aria = normalizeText(el.getAttribute("aria-label"));
+    if (text !== "message" && text !== "send message" && aria !== "message" && aria !== "send message") return false;
+    if (text.includes("inmail") || aria.includes("inmail")) return false;
+    if (text.includes("sales navigator") || aria.includes("sales navigator")) return false;
+    return true;
+  }));
+}
+
+function getSalesNavigatorMessageTriggers() {
+  const allButtons = Array.from(document.querySelectorAll("button, a[role='button'], a"));
+  return dedupeNodes(allButtons.filter((el) => {
+    if (!isVisible(el)) return false;
+    const text = normalizeText(el.textContent);
+    const aria = normalizeText(el.getAttribute("aria-label"));
+    const dataControl = normalizeText(el.getAttribute("data-control-name"));
+    if (text === "message" || text === "send message" || aria.includes("message") || dataControl.includes("message")) {
+      if (text.includes("inmail") || aria.includes("inmail")) return false;
+      return true;
+    }
+    return false;
+  }));
+}
+
+async function openConnectNoteAndGetInput() {
+  const connectInput = findOpenConnectNoteInput(false);
+  if (connectInput) return connectInput;
+
+  const connectTrigger = getConnectTrigger();
+  if (!connectTrigger) return null;
+
+  safeClick(connectTrigger);
+  await sleep(450);
+
+  const addNote = findAddNoteButton();
+  if (addNote) {
+    safeClick(addNote);
+  }
+
+  return await waitForConnectNoteInput(1600);
+}
+
+function getConnectTrigger() {
+  const buttons = Array.from(document.querySelectorAll("button, a[role='button']"));
+  return buttons.find((el) => {
+    if (!isVisible(el)) return false;
+    const text = normalizeText(el.textContent);
+    const aria = normalizeText(el.getAttribute("aria-label"));
+    return text === "connect" || text === "invite" || aria.includes("connect");
+  }) || null;
+}
+
+function findAddNoteButton() {
+  const buttons = Array.from(document.querySelectorAll("button, a[role='button']"));
+  return buttons.find((el) => {
+    if (!isVisible(el)) return false;
+    const text = normalizeText(el.textContent);
+    const aria = normalizeText(el.getAttribute("aria-label"));
+    return text.includes("add a note") || aria.includes("add a note");
+  }) || null;
+}
+
+function safeClick(el) {
+  if (!el) return;
+  try {
+    el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "mouse" }));
+  } catch (_error) {
+    // Ignore pointer event constructor issues.
+  }
+  try {
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+    el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  } catch (_error) {
+    // Ignore mouse event issues.
+  }
+  try {
+    if (typeof el.click === "function") el.click();
+  } catch (_error) {
+    // Ignore direct click issues.
+  }
+}
+
+function normalizeText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function dedupeNodes(nodes) {
+  return Array.from(new Set(nodes));
 }
 
 function clearContentEditable(element) {
@@ -1213,7 +1402,7 @@ function clearContentEditable(element) {
 }
 
 function getComposerText() {
-  const composer = getComposerEditable();
+  const composer = getComposerEditable(true);
   if (!composer) return "";
   return readComposerText(composer);
 }
@@ -1238,7 +1427,6 @@ function dispatchComposerInputEvents(composer, text) {
   }
 
   composer.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
-  composer.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, cancelable: true, key: "Enter" }));
 }
 
 function tryExecInsert(composer, text) {
@@ -1258,41 +1446,77 @@ function tryExecInsert(composer, text) {
   }
 }
 
-function getComposerOpenTriggers() {
-  const prioritySelectors = [
-    "button[aria-label*='Message']",
-    "button[aria-label*='message']",
-    "button[data-control-name*='message']",
-    "a[href*='/messaging/compose/']"
+function findOpenConnectNoteInput(includeSalesNavigator) {
+  const selectors = [
+    "textarea#custom-message",
+    "textarea[name='message']",
+    "div[contenteditable='true'][aria-label*='add a note' i]",
+    "textarea[aria-label*='add a note' i]",
+    "div[contenteditable='true'][data-placeholder*='Add a note' i]"
   ];
 
-  const targets = [];
-  prioritySelectors.forEach((selector) => {
-    document.querySelectorAll(selector).forEach((node) => {
-      if (node && isVisible(node)) targets.push(node);
-    });
-  });
+  if (includeSalesNavigator) {
+    selectors.unshift(
+      ".compose-message__message-field div[contenteditable='true']",
+      ".compose-message__message-field textarea",
+      "textarea[placeholder*='Type your message' i]",
+      "div[contenteditable='true'][aria-label*='Type your message' i]",
+      "div[contenteditable='true'][data-placeholder*='Type your message' i]"
+    );
+  }
 
-  if (targets.length) return dedupeNodes(targets);
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el && isVisible(el)) return el;
+  }
 
-  const fallback = Array.from(document.querySelectorAll("button, a")).filter((element) => {
-    const text = String(element.textContent || "").trim().toLowerCase();
-    return (text.includes("message") || text.includes("new message") || text.includes("send message")) && isVisible(element);
-  });
-
-  return dedupeNodes(fallback);
+  return null;
 }
 
-function dedupeNodes(nodes) {
-  return Array.from(new Set(nodes));
+function getComposerEditable(includeSalesNavigator = false) {
+  const candidates = [
+    "div.msg-form__contenteditable[contenteditable='true']",
+    "div.msg-form__contenteditable[role='textbox']",
+    "div[role='textbox'][contenteditable='true']",
+    ".msg-form__contenteditable",
+    "textarea[name='message']",
+    "textarea.msg-form__contenteditable"
+  ];
+
+  if (includeSalesNavigator || isSalesNavigatorPage()) {
+    candidates.unshift(
+      ".compose-message__message-field div[contenteditable='true']",
+      ".compose-message__message-field textarea",
+      "textarea[placeholder*='Type your message' i]",
+      "div[contenteditable='true'][aria-label*='Type your message' i]",
+      "div[contenteditable='true'][data-placeholder*='Type your message' i]"
+    );
+  }
+
+  for (const selector of candidates) {
+    const el = document.querySelector(selector);
+    if (el && isVisible(el)) return el;
+  }
+
+  return null;
 }
 
-async function waitForComposer(timeoutMs = 1200) {
+async function waitForComposer(timeoutMs = 1200, includeSalesNavigator = false) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const composer = getComposerEditable();
+    const composer = getComposerEditable(includeSalesNavigator);
     if (composer) return composer;
-    await sleep(80);
+    await sleep(90);
+  }
+  return null;
+}
+
+async function waitForConnectNoteInput(timeoutMs = 1200) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const input = findOpenConnectNoteInput(false);
+    if (input) return input;
+    await sleep(90);
   }
   return null;
 }

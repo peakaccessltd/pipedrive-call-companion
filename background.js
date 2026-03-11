@@ -1073,11 +1073,24 @@ function normalizeOpenUrl(rawUrl) {
   const value = String(rawUrl || "").trim();
   if (!value) return "";
 
+  const publicLinkedInUrl = extractPublicLinkedInProfileUrl(value);
+  if (publicLinkedInUrl) return publicLinkedInUrl;
+
   const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value.replace(/^\/+/, "")}`;
 
   try {
     const parsed = new URL(withProtocol);
     if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    const host = String(parsed.hostname || "").toLowerCase();
+    if (host.includes("linkedin.com")) {
+      const path = String(parsed.pathname || "");
+      if (/^\/sales\//i.test(path)) return "";
+      if (!/^\/in\/[^/]+/i.test(path)) return "";
+      parsed.search = "";
+      parsed.hash = "";
+      parsed.pathname = path.match(/^\/in\/[^/]+/i)?.[0] || path;
+      return parsed.toString().replace(/\/+$/, "");
+    }
     return parsed.toString();
   } catch (_error) {
     return "";
@@ -1429,15 +1442,48 @@ function findLinkedInUrlFromEntity(entity, depth = 0) {
 }
 
 function normalizeLinkedInUrl(value) {
+  const extracted = extractPublicLinkedInProfileUrl(value);
+  if (extracted) return extracted;
+
   const raw = normalizeLinkedInCandidate(value);
   if (!raw) return "";
 
   try {
     const parsed = new URL(raw);
-    if (!String(parsed.hostname || "").toLowerCase().includes("linkedin.com")) {
+    const host = String(parsed.hostname || "").toLowerCase();
+    if (!host.includes("linkedin.com")) {
+      return "";
+    }
+    const path = String(parsed.pathname || "");
+    if (!/^\/in\/[^/]+/i.test(path)) {
       return "";
     }
     parsed.hash = "";
+    parsed.search = "";
+    parsed.pathname = path.match(/^\/in\/[^/]+/i)?.[0] || path;
+    return parsed.toString().replace(/\/+$/, "");
+  } catch (_error) {
+    return "";
+  }
+}
+
+function extractPublicLinkedInProfileUrl(rawValue) {
+  const input = String(rawValue || "");
+  if (!input) return "";
+  let decoded = input;
+  try {
+    decoded = decodeURIComponent(input);
+  } catch (_error) {
+    decoded = input;
+  }
+  const match = decoded.match(/https?:\/\/(?:[a-z0-9-]+\.)?linkedin\.com\/in\/[a-z0-9-_%]+/i);
+  if (!match?.[0]) return "";
+
+  try {
+    const parsed = new URL(match[0]);
+    parsed.hash = "";
+    parsed.search = "";
+    parsed.pathname = (parsed.pathname.match(/^\/in\/[^/]+/i)?.[0] || parsed.pathname).replace(/\/+$/, "");
     return parsed.toString().replace(/\/+$/, "");
   } catch (_error) {
     return "";

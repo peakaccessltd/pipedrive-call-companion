@@ -276,14 +276,48 @@ function escapeHtml(value) {
 }
 
 export function canonicalizeLinkedInUrl(url) {
+  const extracted = extractPublicLinkedInProfileUrl(url);
+  if (extracted) return extracted.toLowerCase();
+
   try {
     const parsed = new URL(String(url || ""));
+    const host = String(parsed.hostname || "").toLowerCase();
+    const path = String(parsed.pathname || "");
+    if (!host.includes("linkedin.com")) return "";
+    if (!/^\/in\/[^/]+/i.test(path)) return "";
     parsed.search = "";
     parsed.hash = "";
-    parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+    parsed.pathname = (path.match(/^\/in\/[^/]+/i)?.[0] || path).replace(/\/+$/, "");
     return `${parsed.origin}${parsed.pathname}`.toLowerCase();
   } catch (_error) {
-    return String(url || "").trim().toLowerCase();
+    return "";
+  }
+}
+
+function extractPublicLinkedInProfileUrl(rawValue) {
+  const input = String(rawValue || "");
+  if (!input) return "";
+
+  let decoded = input;
+  try {
+    decoded = decodeURIComponent(input);
+  } catch (_error) {
+    decoded = input;
+  }
+
+  const match = decoded.match(/https?:\/\/(?:[a-z0-9-]+\.)?linkedin\.com\/in\/[a-z0-9-_%]+/i);
+  if (!match?.[0]) return "";
+
+  try {
+    const parsed = new URL(match[0]);
+    const path = String(parsed.pathname || "");
+    if (!/^\/in\/[^/]+/i.test(path)) return "";
+    parsed.search = "";
+    parsed.hash = "";
+    parsed.pathname = (path.match(/^\/in\/[^/]+/i)?.[0] || path).replace(/\/+$/, "");
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch (_error) {
+    return "";
   }
 }
 

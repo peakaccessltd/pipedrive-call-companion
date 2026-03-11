@@ -5,9 +5,7 @@ const refs = {
   matchCandidates: document.getElementById("matchCandidates"),
   templateSelect: document.getElementById("templateSelect"),
   stageInput: document.getElementById("stageInput"),
-  draftText: document.getElementById("draftText"),
-  insertBtn: document.getElementById("insertBtn"),
-  copyBtn: document.getElementById("copyBtn"),
+  useTemplateBtn: document.getElementById("useTemplateBtn"),
   logAdvanceBtn: document.getElementById("logAdvanceBtn"),
   status: document.getElementById("status")
 };
@@ -28,8 +26,7 @@ const state = {
 refs.refreshBtn.addEventListener("click", refreshAll);
 refs.templateSelect.addEventListener("change", onTemplateChanged);
 refs.stageInput.addEventListener("change", onStageChanged);
-refs.insertBtn.addEventListener("click", onInsertTemplate);
-refs.copyBtn.addEventListener("click", onCopy);
+refs.useTemplateBtn.addEventListener("click", onInsertTemplate);
 refs.logAdvanceBtn.addEventListener("click", onLogAndAdvance);
 
 initTemplateSelect();
@@ -68,7 +65,6 @@ async function refreshAll() {
     renderMatchCard();
   }
 
-  applyTemplateToComposer();
   setStatus("LinkedIn Mode ready.", false, true);
 }
 
@@ -138,7 +134,6 @@ function renderMatchCard() {
 
       state.match = resp.data;
       renderMatchCard();
-      applyTemplateToComposer();
       setStatus("Match confirmed and LinkedIn URL saved.", false, true);
     });
 
@@ -149,18 +144,16 @@ function renderMatchCard() {
 
 function onTemplateChanged() {
   state.selectedTemplateId = refs.templateSelect.value || TEMPLATE_OPTIONS[0].id;
-  applyTemplateToComposer();
 }
 
 function onStageChanged() {
   const stage = Number(refs.stageInput.value || 1);
   state.stage = Number.isFinite(stage) && stage > 0 ? stage : 1;
   refs.stageInput.value = String(state.stage);
-  applyTemplateToComposer();
 }
 
-function applyTemplateToComposer() {
-  refs.draftText.value = buildTemplateMessage({
+function getSelectedTemplateText() {
+  return buildTemplateMessage({
     templateId: state.selectedTemplateId,
     stage: state.stage,
     context: state.linkedinContext,
@@ -194,9 +187,9 @@ function buildTemplateMessage({ templateId, stage, context, match }) {
 }
 
 async function onInsertTemplate() {
-  const text = refs.draftText.value.trim();
+  const text = getSelectedTemplateText().trim();
   if (!text) {
-    setStatus("Select or edit a template first.", true);
+    setStatus("No template text available.", true);
     return;
   }
 
@@ -213,30 +206,10 @@ async function onInsertTemplate() {
   if (resp.data.inserted) {
     setStatus("Template inserted into LinkedIn composer.", false, true);
   } else if (resp.data.copied) {
-    setStatus("Composer unavailable; copied to clipboard.", false, true);
+    setStatus(resp.data.message || "Composer unavailable; copied to clipboard.", false, true);
   } else {
-    setStatus("Could not insert template.", true);
+    setStatus(resp.data.message || "Could not insert template.", true);
   }
-}
-
-async function onCopy() {
-  const text = refs.draftText.value.trim();
-  if (!text) {
-    setStatus("Nothing to copy.", true);
-    return;
-  }
-
-  const resp = await sendRuntimeMessage({
-    type: "LINKEDIN_COPY_TEXT",
-    payload: { text }
-  });
-
-  if (!resp.ok || !resp.data?.copied) {
-    setStatus(resp.error || "Clipboard copy failed", true);
-    return;
-  }
-
-  setStatus("Copied to clipboard.", false, true);
 }
 
 async function onLogAndAdvance() {
@@ -247,8 +220,7 @@ async function onLogAndAdvance() {
 
   const composerResp = await sendRuntimeMessage({ type: "LINKEDIN_GET_COMPOSER_TEXT" });
   const composerText = composerResp.ok ? composerResp.data.text : "";
-  const draftText = refs.draftText.value.trim();
-  const dmText = composerText || draftText;
+  const dmText = composerText || getSelectedTemplateText();
 
   if (!dmText) {
     setStatus("No DM text found to log.", true);
@@ -274,7 +246,6 @@ async function onLogAndAdvance() {
 
   state.stage = Number(resp.data.nextStage || state.stage + 1);
   refs.stageInput.value = String(state.stage);
-  applyTemplateToComposer();
 
   if (resp.data.activityWarning) {
     setStatus(`Logged note + advanced to stage ${resp.data.nextStage}. Activity warning: ${resp.data.activityWarning}`, true);

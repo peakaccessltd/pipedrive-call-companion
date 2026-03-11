@@ -6,8 +6,8 @@
   --cc-border: #d9e1ec;
   --cc-text: #1d2a3a;
   --cc-text-muted: #5f6f86;
-  --cc-primary: #0a5bd8;
-  --cc-primary-strong: #0849ae;
+  --cc-primary: #4cae4f;
+  --cc-primary-strong: #449c47;
   --cc-accent: #00b4d8;
   --cc-danger: #c2415d;
   --cc-success: #1e8e5a;
@@ -26,15 +26,17 @@
 
 .cc-panel {
   position: fixed;
-  top: 0;
-  right: 0;
-  width: min(460px, 92vw);
-  height: 100vh;
-  max-height: 100vh;
+  right: 16px;
+  bottom: 16px;
+  top: auto;
+  width: min(380px, calc(100vw - 24px));
+  height: auto;
+  max-height: min(72vh, 560px);
   background: linear-gradient(180deg, #f7faff 0%, var(--cc-bg) 100%);
   color: var(--cc-text);
-  border-left: 1px solid var(--cc-border);
-  box-shadow: -18px 0 30px rgba(20, 42, 71, 0.18);
+  border: 1px solid var(--cc-border);
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(20, 42, 71, 0.22);
   pointer-events: auto;
   display: flex;
   flex-direction: column;
@@ -44,23 +46,24 @@
 }
 
 .cc-panel-hidden {
-  transform: translateX(100%);
+  transform: translateY(18px);
   opacity: 0;
+  pointer-events: none;
 }
 
 .cc-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--cc-border);
+  padding: 10px 12px 10px 8px;
+  border-bottom: 1px solid #e6edf5;
   background: #ffffff;
 }
 
 .cc-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   min-width: 0;
 }
 
@@ -73,10 +76,10 @@
 
 .cc-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1.2;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.1px;
   color: #0f2239;
 }
 
@@ -85,18 +88,40 @@
   gap: 8px;
 }
 
-.cc-body {
-  overflow: auto;
-  padding: 12px 14px 18px;
-  display: grid;
-  gap: 12px;
+.cc-icon-btn {
+  border: 1px solid var(--cc-border);
+  border-radius: 10px;
+  background: #f7faf7;
+  color: #2f4f2f;
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--cc-font);
+  cursor: pointer;
 }
 
-.cc-footer {
-  flex: 0 0 auto;
-  border-top: 1px solid var(--cc-border);
-  background: #ffffff;
-  padding: 10px 14px 12px;
+.cc-icon-btn:hover {
+  background: #edf6ed;
+}
+
+.cc-icon-glyph {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.cc-icon-label {
+  font-size: 12px;
+}
+
+.cc-body {
+  overflow: auto;
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 10px;
 }
 
 .cc-section {
@@ -194,7 +219,7 @@
 
 .cc-btn {
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 9px 11px;
   font-size: 14px;
   font-weight: 700;
@@ -203,24 +228,56 @@
   transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
+.cc-btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cc-btn-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+}
+
+.cc-btn-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cc-btn-label {
+  display: inline-block;
+}
+
 .cc-btn-primary {
-  background: linear-gradient(180deg, var(--cc-primary) 0%, var(--cc-primary-strong) 100%);
+  background: var(--cc-primary);
+  border-color: var(--cc-primary-strong);
   color: #fff;
-  box-shadow: 0 8px 14px rgba(10, 91, 216, 0.22);
+  box-shadow: none;
 }
 
 .cc-btn-primary:hover {
-  transform: translateY(-1px);
+  background: var(--cc-primary-strong);
+  transform: none;
 }
 
 .cc-btn-secondary {
-  background: var(--cc-surface-soft);
-  border-color: var(--cc-border);
-  color: #334a65;
+  background: #fff;
+  border-color: #c9d5c9;
+  color: #2f4f2f;
 }
 
 .cc-btn-secondary:hover {
-  background: #eef4fb;
+  background: #f4f8f4;
 }
 
 .cc-notes {
@@ -480,4 +537,13 @@
 
 .cc-launcher-hidden {
   display: none;
+}
+
+@media (max-width: 900px) {
+  .cc-panel {
+    right: 10px;
+    bottom: 10px;
+    width: min(95vw, 420px);
+    max-height: 78vh;
+  }
 }

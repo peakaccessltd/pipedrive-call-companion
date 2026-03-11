@@ -114,6 +114,22 @@ Set environment variables:
 - `GET /templates?sequence_id=<id>&stage=<n>`
 - `GET /eligible/:personId`
 - `POST /pipedrive/webhook`
+- `GET /admin` (basic-auth protected template admin UI)
+- `GET /admin/api/sequences`
+- `PUT /admin/api/sequences`
+
+### Online template editor
+
+You can manage shared templates/sequences in-browser:
+
+1. Set backend env vars:
+   - `ADMIN_USERNAME`
+   - `ADMIN_PASSWORD`
+2. Deploy backend
+3. Open:
+   - `https://<your-backend>/admin`
+4. Sign in with basic auth credentials
+5. Edit JSON, then click **Save**
 
 ## 5) Pipedrive webhook setup
 

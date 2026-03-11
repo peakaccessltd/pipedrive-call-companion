@@ -262,9 +262,10 @@ function renderContainerShell() {
   controls.className = "cc-header-controls";
 
   const refreshBtn = document.createElement("button");
-  refreshBtn.className = "cc-btn cc-btn-secondary";
+  refreshBtn.className = "cc-icon-btn";
   refreshBtn.type = "button";
-  refreshBtn.textContent = "Refresh";
+  refreshBtn.innerHTML = '<span class="cc-icon-glyph" aria-hidden="true">↻</span><span class="cc-icon-label">Refresh</span>';
+  refreshBtn.setAttribute("aria-label", "Refresh");
   refreshBtn.addEventListener("click", () => {
     if (currentContext) {
       loadContextAndBrief(currentContext);
@@ -272,9 +273,10 @@ function renderContainerShell() {
   });
 
   const closeBtn = document.createElement("button");
-  closeBtn.className = "cc-btn cc-btn-secondary";
+  closeBtn.className = "cc-icon-btn";
   closeBtn.type = "button";
-  closeBtn.textContent = "Hide";
+  closeBtn.innerHTML = '<span class="cc-icon-glyph" aria-hidden="true">✕</span><span class="cc-icon-label">Hide</span>';
+  closeBtn.setAttribute("aria-label", "Hide");
   closeBtn.addEventListener("click", () => {
     manualPanelHidden = true;
     closePanel();
@@ -292,11 +294,6 @@ function renderContainerShell() {
   body.className = "cc-body";
   body.dataset.role = "body";
   panelEl.appendChild(body);
-
-  const footer = document.createElement("div");
-  footer.className = "cc-footer";
-  footer.dataset.role = "footer";
-  panelEl.appendChild(footer);
 }
 
 async function loadContextAndBrief(contextRef) {
@@ -337,11 +334,9 @@ function setState(partial) {
 
 async function renderBody() {
   const body = panelEl?.querySelector('[data-role="body"]');
-  const footer = panelEl?.querySelector('[data-role="footer"]');
   if (!body) return;
 
   body.innerHTML = "";
-  if (footer) footer.innerHTML = "";
 
   if (activeState.loading) {
     body.appendChild(renderInfo("Loading call context..."));
@@ -354,19 +349,12 @@ async function renderBody() {
   }
 
   const context = activeState.context;
-  const brief = activeState.brief;
-  if (!context || !brief) {
+  if (!context) {
     body.appendChild(renderInfo("No context available for this page."));
     return;
   }
-
-  const options = await getOptions();
-
-  body.appendChild(renderContextSummary(context, options));
-
-  if (footer) {
-    footer.appendChild(renderActions(context, true));
-  }
+  body.appendChild(renderContextSummary(context));
+  body.appendChild(renderActions(context, true));
 
   if (activeState.mode === "answered") {
     body.appendChild(await renderQuickNotes());
@@ -382,31 +370,13 @@ async function renderBody() {
 }
 
 function renderContextSummary(context) {
-  const section = createSection("Context");
+  const section = createSection("Contact");
   const list = document.createElement("ul");
   list.className = "cc-list";
 
-  const personName = context.person?.name || "Unknown person";
-  const orgName = context.org?.name || context.person?.org?.name || "Unknown org";
-  const dealTitle = context.deal?.title || context.lead?.title || "N/A";
-  const stage = context.deal?.stageId ? `Stage ${context.deal.stageId}` : "N/A";
-  const value = context.deal
-    ? `${Number(context.deal.value || 0).toLocaleString()} ${context.deal.currency || ""}`.trim()
-    : context.lead
-      ? `${Number(context.lead.value || 0).toLocaleString()} ${context.lead.currency || ""}`.trim()
-    : "N/A";
-  const title = context.person?.title || "N/A";
-  const owner = context.person?.ownerName || context.deal?.ownerName || context.lead?.ownerName || "N/A";
-  const website = context.org?.website || "N/A";
-  const linkedIn = context.lead?.linkedIn || context.person?.linkedIn || "N/A";
-
+  const personName = context.person?.name || context.lead?.personName || context.lead?.title || "Unknown person";
+  const linkedIn = getDirectLinkedInUrl(context) || "N/A";
   list.appendChild(labelValueItem("Person", personName));
-  list.appendChild(labelValueItem("Title", title));
-  list.appendChild(labelValueItem("Org", orgName));
-  list.appendChild(labelValueItem("Owner", owner));
-  list.appendChild(labelValueItem(context.type === "lead" ? "Lead" : "Deal", dealTitle));
-  list.appendChild(labelValueItem("Stage / Value", `${stage} / ${value}`));
-  list.appendChild(labelValueItem("Org Website", website));
   list.appendChild(labelValueItem("LinkedIn Profile", linkedIn));
 
   section.appendChild(list);
@@ -480,7 +450,7 @@ function renderActions(context, compact = false) {
   const answeredBtn = button("Answered", "cc-btn-primary", () => {
     setState({ mode: "answered", draftStatus: "" });
     renderBody();
-  });
+  }, "phone");
 
   const noAnswerBtn = button("No Answer", "cc-btn-primary", async () => {
     const url = getDirectLinkedInUrl(context);
@@ -501,7 +471,7 @@ function renderActions(context, compact = false) {
       draftStatus: response.ok ? "Opened LinkedIn in a new window." : response.error || "Could not open LinkedIn."
     });
     renderBody();
-  });
+  }, "hangup");
 
   const linkedInBtn = button("Open LinkedIn", "cc-btn-secondary", async () => {
     const url = getDirectLinkedInUrl(context);
@@ -887,13 +857,34 @@ function renderInfo(message, isError = false, tone = "") {
   return el;
 }
 
-function button(label, className, onClick) {
+function button(label, className, onClick, icon = "") {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = `cc-btn ${className}`.trim();
-  btn.textContent = label;
+
+  if (icon) {
+    btn.classList.add("cc-btn-with-icon");
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "cc-btn-icon";
+    iconWrap.innerHTML = getActionIconSvg(icon);
+    const labelWrap = document.createElement("span");
+    labelWrap.className = "cc-btn-label";
+    labelWrap.textContent = label;
+    btn.appendChild(iconWrap);
+    btn.appendChild(labelWrap);
+  } else {
+    btn.textContent = label;
+  }
+
   btn.addEventListener("click", onClick);
   return btn;
+}
+
+function getActionIconSvg(icon) {
+  if (icon === "hangup") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12.5c2.2-1.5 5.2-2.3 9-2.3s6.8.8 9 2.3" /><path d="M8.5 13.2l-1.7 3.8" /><path d="M15.5 13.2l1.7 3.8" /></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.6 4.5c.4-.4 1-.5 1.4-.1l2.2 1.8c.4.3.5.8.4 1.2l-.7 2.1c-.1.3 0 .7.2.9l3 3c.2.2.6.3.9.2l2.1-.7c.4-.1.9 0 1.2.4l1.8 2.2c.3.4.3 1-.1 1.4l-1.5 1.5c-.6.6-1.4.8-2.2.6-2.4-.6-5-2.2-7.3-4.5s-3.9-4.9-4.5-7.3c-.2-.8 0-1.6.6-2.2z" /></svg>';
 }
 
 function buildLinkedInQuery(context) {
@@ -959,6 +950,9 @@ function canonicalizeLinkedInUrl(value) {
   let raw = String(value || "").trim();
   if (!raw) return "";
 
+  const embeddedPublicUrl = extractPublicLinkedInProfileUrl(raw);
+  if (embeddedPublicUrl) return embeddedPublicUrl;
+
   raw = raw.replace(/\\\//g, "/").replace(/^"+|"+$/g, "");
   if (!raw) return "";
 
@@ -974,8 +968,36 @@ function canonicalizeLinkedInUrl(value) {
 
   try {
     const parsed = new URL(raw);
-    if (!String(parsed.hostname || "").toLowerCase().includes("linkedin.com")) return "";
+    const host = String(parsed.hostname || "").toLowerCase();
+    if (!host.includes("linkedin.com")) return "";
+    const path = String(parsed.pathname || "");
+    if (!/^\/in\/[^/]+/i.test(path)) return "";
     parsed.hash = "";
+    parsed.search = "";
+    parsed.pathname = path.match(/^\/in\/[^/]+/i)?.[0] || path;
+    return parsed.toString().replace(/\/+$/, "");
+  } catch (_error) {
+    return "";
+  }
+}
+
+function extractPublicLinkedInProfileUrl(rawValue) {
+  const input = String(rawValue || "");
+  if (!input) return "";
+  let decoded = input;
+  try {
+    decoded = decodeURIComponent(input);
+  } catch (_error) {
+    decoded = input;
+  }
+  const match = decoded.match(/https?:\/\/(?:[a-z0-9-]+\.)?linkedin\.com\/in\/[a-z0-9-_%]+/i);
+  if (!match?.[0]) return "";
+
+  try {
+    const parsed = new URL(match[0]);
+    parsed.hash = "";
+    parsed.search = "";
+    parsed.pathname = (parsed.pathname.match(/^\/in\/[^/]+/i)?.[0] || parsed.pathname).replace(/\/+$/, "");
     return parsed.toString().replace(/\/+$/, "");
   } catch (_error) {
     return "";

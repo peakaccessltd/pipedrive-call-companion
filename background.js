@@ -1835,7 +1835,24 @@ async function handleLinkedInLogAndAdvance(payload) {
       note: dmText
     });
   } catch (error) {
-    activityWarning = toUserError(error);
+    if (leadId) {
+      try {
+        // Fallback: some Pipedrive setups reject lead-linked activities.
+        activityResult = await createLinkedInDmActivity({
+          baseOrigin,
+          apiToken: options.apiToken,
+          personId,
+          subject,
+          type: "task",
+          dueDate: today,
+          note: dmText
+        });
+      } catch (fallbackError) {
+        activityWarning = `Lead-linked activity failed: ${toUserError(error)}. Person-linked fallback failed: ${toUserError(fallbackError)}`;
+      }
+    } else {
+      activityWarning = toUserError(error);
+    }
   }
 
   await updatePersonFields({

@@ -158,9 +158,9 @@ function injectShadowWidget() {
       right: 12px;
       bottom: 12px;
       top: auto;
-      width: min(430px, calc(100vw - 24px));
+      width: min(500px, calc(100vw - 24px));
       height: auto;
-      max-height: min(72vh, 760px);
+      max-height: calc(100vh - 24px);
       background: linear-gradient(180deg, #f7faff 0%, var(--pa-bg) 100%);
       border: 1px solid var(--pa-border);
       border-radius: 14px;
@@ -187,11 +187,11 @@ function injectShadowWidget() {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 14px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--pa-border);
       background: #ffffff;
       color: #0f2239;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       letter-spacing: 0.2px;
     }
@@ -210,21 +210,21 @@ function injectShadowWidget() {
     .pa-body {
       flex: 1 1 auto;
       min-height: 0;
-      overflow: auto;
+      overflow: hidden;
       overscroll-behavior: contain;
-      padding: 10px 12px 14px;
-      font-size: 14px;
+      padding: 8px 10px 10px;
+      font-size: 13px;
       color: var(--pa-text);
       display: grid;
-      gap: 10px;
+      gap: 8px;
       background: transparent;
     }
 
     .pa-section {
       display: grid;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
-      padding-bottom: 10px;
+      padding-bottom: 6px;
       border-bottom: 1px solid #e6edf5;
     }
 
@@ -242,7 +242,7 @@ function injectShadowWidget() {
 
     .pa-section h3 {
       margin: 0;
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       color: var(--pa-text-muted);
@@ -268,15 +268,15 @@ function injectShadowWidget() {
       border: 1px solid var(--pa-border);
       border-radius: 10px;
       background: #fff;
-      padding: 9px;
-      font-size: 14px;
+      padding: 7px 8px;
+      font-size: 13px;
       color: var(--pa-text);
       font-family: var(--pa-font);
       min-width: 0;
     }
 
     .pa-textarea {
-      min-height: 130px;
+      min-height: 88px;
       resize: vertical;
       line-height: 1.45;
     }
@@ -339,8 +339,8 @@ function injectShadowWidget() {
     .pa-item button, .pa-row button, .pa-top-actions button {
       border: 1px solid transparent;
       border-radius: 10px;
-      padding: 9px 11px;
-      font-size: 14px;
+      padding: 7px 9px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
       font-family: var(--pa-font);
@@ -348,7 +348,7 @@ function injectShadowWidget() {
     }
 
     .pa-row button {
-      min-width: 120px;
+      min-width: 104px;
     }
 
     .pa-row .pa-input,
@@ -398,7 +398,7 @@ function injectShadowWidget() {
     }
 
     .pa-kv-line {
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
 
     .pa-kv-line:last-child {

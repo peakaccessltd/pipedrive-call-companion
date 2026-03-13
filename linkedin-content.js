@@ -498,6 +498,14 @@ function createFallbackDrawer() {
       <div id="paTemplateList" class="pa-list"></div>
     </section>
     <section class="pa-section">
+      <h3>Composer</h3>
+      <textarea id="paComposer" class="pa-textarea" placeholder="Template text appears here. You can edit before posting."></textarea>
+      <div class="pa-row">
+        <button id="paPostBtn" class="pa-primary" type="button">Post to LinkedIn</button>
+        <button id="paCopyBtn" class="pa-secondary" type="button">Copy</button>
+      </div>
+    </section>
+    <section class="pa-section">
       <button id="paLogBtn" class="pa-primary pa-full" type="button">Log & Advance</button>
     </section>
     <section class="pa-section">
@@ -624,6 +632,33 @@ function wireFallbackEvents(drawer) {
       await runFallbackPersonSearch(drawer);
     }
   });
+  drawer.querySelector("#paPostBtn")?.addEventListener("click", async () => {
+    const text = getFallbackComposerText(drawer).trim();
+    if (!text) {
+      setFallbackStatus("Composer is empty. Choose a template or write a message first.", true);
+      return;
+    }
+    const result = await tryInsertWithPending(text);
+    if (!result.inserted) {
+      setFallbackStatus(
+        result.message || (result.copied
+          ? "Could not post directly. Copied to clipboard."
+          : "Could not post to LinkedIn composer."),
+        !result.copied
+      );
+      return;
+    }
+    setFallbackStatus("Composer text posted into LinkedIn composer.");
+  });
+  drawer.querySelector("#paCopyBtn")?.addEventListener("click", async () => {
+    const text = getFallbackComposerText(drawer).trim();
+    if (!text) {
+      setFallbackStatus("Composer is empty.", true);
+      return;
+    }
+    const copied = await fallbackCopyToClipboard(text);
+    setFallbackStatus(copied ? "Copied composer text." : "Copy failed.", !copied);
+  });
   // Delegated fallback in case direct listeners get replaced during reinjection.
   drawer.addEventListener("click", async (event) => {
     const target = event.target;
@@ -652,7 +687,7 @@ function wireFallbackEvents(drawer) {
     const selectedTemplateText = STATE.fallback.selectedTemplate
       ? interpolateTemplate(STATE.fallback.selectedTemplate.body)
       : "";
-    const dmText = getComposerText() || selectedTemplateText;
+    const dmText = getFallbackComposerText(drawer).trim() || getComposerText() || selectedTemplateText;
     if (!dmText) return setFallbackStatus("No message text to log.", true);
 
     const response = await sendRuntimeMessage({
@@ -902,22 +937,23 @@ function renderTemplates(drawer) {
       STATE.fallback.selectedTemplateId = template.id;
       STATE.fallback.selectedTemplate = template;
       const text = interpolateTemplate(template.body);
-      const result = await tryInsertWithPending(text);
-      if (!result.inserted) {
-        setFallbackStatus(
-          result.message || (result.copied
-            ? "Open a LinkedIn Message composer or Connect note first, then click Use Template. Copied to clipboard."
-            : "Open a LinkedIn Message composer or Connect note first, then click Use Template."),
-          !result.copied
-        );
-        return;
-      }
-      setFallbackStatus(`${template.label} inserted into LinkedIn composer.`);
+      setFallbackComposerText(drawer, text);
+      setFallbackStatus(`${template.label} loaded into composer. Review, then click Post to LinkedIn.`);
     });
 
     item.appendChild(useBtn);
     root.appendChild(item);
   });
+}
+
+function getFallbackComposerText(drawer) {
+  return String(drawer?.querySelector("#paComposer")?.value || "");
+}
+
+function setFallbackComposerText(drawer, text) {
+  const composer = drawer?.querySelector("#paComposer");
+  if (!composer) return;
+  composer.value = String(text || "");
 }
 
 function renderContextCard(drawer, text) {

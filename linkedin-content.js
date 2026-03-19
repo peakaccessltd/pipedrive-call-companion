@@ -105,8 +105,9 @@ function injectShadowWidget() {
       --pa-border: #d9e1ec;
       --pa-text: #1d2a3a;
       --pa-text-muted: #5f6f86;
-      --pa-primary: #0a5bd8;
-      --pa-primary-strong: #0849ae;
+      --pa-primary: #4cae4f;
+      --pa-primary-strong: #449c47;
+      --pa-accent: #00b4d8;
       --pa-danger: #c2415d;
       --pa-success: #1e8e5a;
     }
@@ -133,7 +134,7 @@ function injectShadowWidget() {
     }
 
     .${SHADOW_WRAPPER_CLASS} button {
-      border: 1px solid #0a4bb0;
+      border: 1px solid var(--pa-primary-strong);
       border-right: 0;
       border-radius: 10px 0 0 10px;
       min-width: 38px;
@@ -144,8 +145,8 @@ function injectShadowWidget() {
       letter-spacing: 0.35px;
       cursor: grab;
       color: #fff;
-      background: linear-gradient(180deg, #0a5bd8 0%, #0849ae 100%);
-      box-shadow: 0 12px 20px rgba(9, 57, 130, 0.3);
+      background: linear-gradient(180deg, var(--pa-primary) 0%, var(--pa-primary-strong) 100%);
+      box-shadow: 0 12px 20px rgba(53, 106, 55, 0.28);
       white-space: nowrap;
     }
 
@@ -196,15 +197,38 @@ function injectShadowWidget() {
       letter-spacing: 0.2px;
     }
 
-    .pa-drawer-header button {
+    .pa-header-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pa-icon-btn {
       border: 1px solid var(--pa-border);
       border-radius: 10px;
-      background: var(--pa-surface-soft);
-      color: #334a65;
-      font-size: 14px;
+      background: #f7faf7;
+      color: #2f4f2f;
+      height: 32px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
       font-weight: 700;
-      padding: 9px 11px;
+      font-family: var(--pa-font);
       cursor: pointer;
+    }
+
+    .pa-icon-btn:hover {
+      background: #edf6ed;
+    }
+
+    .pa-icon-glyph {
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .pa-icon-label {
+      font-size: 12px;
     }
 
     .pa-body {
@@ -212,12 +236,31 @@ function injectShadowWidget() {
       min-height: 0;
       overflow: hidden;
       overscroll-behavior: contain;
-      padding: 8px 10px 10px;
+      padding: 0;
       font-size: 13px;
       color: var(--pa-text);
+      display: flex;
+      flex-direction: column;
+      background: transparent;
+    }
+
+    .pa-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 8px 10px 6px;
       display: grid;
       gap: 8px;
-      background: transparent;
+    }
+
+    .pa-sticky-footer {
+      flex: 0 0 auto;
+      padding: 8px 10px 10px;
+      border-top: 1px solid #e6edf5;
+      background: linear-gradient(180deg, rgba(247, 250, 255, 0.96) 0%, rgba(244, 247, 251, 0.98) 100%);
+      backdrop-filter: blur(8px);
+      display: grid;
+      gap: 8px;
     }
 
     .pa-section {
@@ -336,18 +379,21 @@ function injectShadowWidget() {
       border-bottom: 0;
     }
 
-    .pa-item button, .pa-row button, .pa-top-actions button {
+    .pa-action-btn {
       border: 1px solid transparent;
       border-radius: 10px;
-      padding: 7px 9px;
-      font-size: 13px;
+      padding: 9px 11px;
+      font-size: 14px;
       font-weight: 700;
+      line-height: 1.2;
       cursor: pointer;
       font-family: var(--pa-font);
       transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+      appearance: none;
+      -webkit-appearance: none;
     }
 
-    .pa-row button {
+    .pa-row .pa-action-btn {
       min-width: 104px;
     }
 
@@ -359,29 +405,24 @@ function injectShadowWidget() {
     }
 
     .pa-primary {
-      background: linear-gradient(180deg, var(--pa-primary) 0%, var(--pa-primary-strong) 100%);
+      background: var(--pa-primary);
+      border-color: var(--pa-primary-strong);
       color: #fff;
-      box-shadow: 0 8px 14px rgba(10, 91, 216, 0.22);
+      box-shadow: none;
     }
 
     .pa-secondary {
-      background: var(--pa-surface-soft);
-      color: #334a65;
+      background: #f7faf7;
+      color: #2f4f2f;
       border-color: var(--pa-border);
     }
 
     .pa-primary:hover {
-      transform: translateY(-1px);
+      background: var(--pa-primary-strong);
     }
 
     .pa-secondary:hover {
-      background: #eef4fb;
-    }
-
-    .pa-top-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
+      background: #edf6ed;
     }
 
     .pa-drawer-brand {
@@ -407,6 +448,60 @@ function injectShadowWidget() {
 
     .pa-kv-label {
       font-weight: 700;
+    }
+
+    .pa-match-hint {
+      margin: -2px 0 2px;
+      font-size: 12px;
+      color: var(--pa-text-muted);
+      line-height: 1.4;
+    }
+
+    .pa-candidate-card {
+      border: 1px solid var(--pa-border);
+      border-radius: 10px;
+      background: var(--pa-surface);
+      padding: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 10px;
+      align-items: center;
+      box-shadow: 0 6px 16px rgba(20, 42, 71, 0.06);
+    }
+
+    .pa-candidate-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #21364f;
+      line-height: 1.35;
+    }
+
+    .pa-candidate-meta {
+      font-size: 12px;
+      color: var(--pa-text-muted);
+      line-height: 1.4;
+      grid-column: 1 / 2;
+    }
+
+    .pa-confirm-match {
+      justify-self: end;
+      align-self: center;
+      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      grid-column: 2 / 3;
+      grid-row: 1 / span 2;
+    }
+
+    .pa-confirm-icon {
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .pa-confirm-label {
+      font-size: 12px;
     }
   `;
 
@@ -479,9 +574,19 @@ function createFallbackDrawer() {
   brand.appendChild(logo);
   brand.appendChild(headerTitle);
 
+  const controls = document.createElement("div");
+  controls.className = "pa-header-controls";
+
+  const refreshBtn = document.createElement("button");
+  refreshBtn.type = "button";
+  refreshBtn.id = "paRefreshBtn";
+  refreshBtn.className = "pa-icon-btn";
+  refreshBtn.innerHTML = '<span class="pa-icon-glyph" aria-hidden="true">↻</span><span class="pa-icon-label">Refresh</span>';
+
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
-  closeBtn.textContent = "Close";
+  closeBtn.className = "pa-icon-btn";
+  closeBtn.innerHTML = '<span class="pa-icon-glyph" aria-hidden="true">✕</span><span class="pa-icon-label">Hide</span>';
   closeBtn.addEventListener("click", () => {
     STATE.drawerVisible = false;
     updateDrawerState();
@@ -490,47 +595,51 @@ function createFallbackDrawer() {
   const body = document.createElement("div");
   body.className = "pa-body";
   body.innerHTML = `
-    <div class="pa-top-actions">
-      <button id="paRefreshBtn" class="pa-secondary" type="button">Refresh</button>
+    <div class="pa-scroll">
+      <section class="pa-section">
+        <h3>Detected LinkedIn Context</h3>
+        <div id="paContextCard" class="pa-card"></div>
+      </section>
+      <section class="pa-section">
+        <h3>Pipedrive Match</h3>
+        <div id="paMatchCard" class="pa-card"></div>
+        <div class="pa-match-hint">Search for a person if no direct match is found, then confirm the right record to save the LinkedIn URL back to Pipedrive.</div>
+        <div class="pa-row">
+          <input id="paSearchName" class="pa-input" type="text" placeholder="Search Pipedrive person by name" />
+        <button id="paSearchBtn" class="pa-action-btn pa-secondary" type="button">Search</button>
+        </div>
+        <div id="paCandidateList" class="pa-list"></div>
+      </section>
+      <section class="pa-section">
+        <h3>Message Templates</h3>
+        <select id="paTemplateSelect" class="pa-select"></select>
+        <input id="paStageInput" class="pa-input" type="number" min="1" step="1" />
+        <div id="paTemplateList" class="pa-list"></div>
+      </section>
     </div>
-    <section class="pa-section">
-      <h3>Detected LinkedIn Context</h3>
-      <div id="paContextCard" class="pa-card"></div>
-    </section>
-    <section class="pa-section">
-      <h3>Pipedrive Match</h3>
-      <div id="paMatchCard" class="pa-card"></div>
-      <div class="pa-row">
-        <input id="paSearchName" class="pa-input" type="text" placeholder="Search Pipedrive person by name" />
-        <button id="paSearchBtn" class="pa-secondary" type="button">Search</button>
-      </div>
-      <div id="paCandidateList" class="pa-list"></div>
-    </section>
-    <section class="pa-section">
-      <h3>Message Templates</h3>
-      <select id="paTemplateSelect" class="pa-select"></select>
-      <input id="paStageInput" class="pa-input" type="number" min="1" step="1" />
-      <div id="paTemplateList" class="pa-list"></div>
-    </section>
-    <section class="pa-section">
-      <h3>Composer</h3>
-      <textarea id="paComposer" class="pa-textarea" placeholder="Template text appears here. You can edit before posting."></textarea>
-      <div class="pa-row">
-        <button id="paPostBtn" class="pa-primary" type="button">Post to LinkedIn</button>
-        <button id="paCopyBtn" class="pa-secondary" type="button">Copy</button>
-      </div>
-    </section>
-    <section class="pa-section">
-      <button id="paLogBtn" class="pa-primary pa-full" type="button">Log & Advance</button>
-    </section>
-    <section class="pa-section">
-      <h3>Status</h3>
-      <div id="paStatus" class="pa-card">Idle.</div>
-    </section>
+    <div class="pa-sticky-footer">
+      <section class="pa-section">
+        <h3>Composer</h3>
+        <textarea id="paComposer" class="pa-textarea" placeholder="Template text appears here. You can edit before posting."></textarea>
+        <div class="pa-row">
+          <button id="paPostBtn" class="pa-action-btn pa-primary" type="button">Post to LinkedIn</button>
+          <button id="paCopyBtn" class="pa-action-btn pa-secondary" type="button">Copy</button>
+        </div>
+      </section>
+      <section class="pa-section">
+        <button id="paLogBtn" class="pa-action-btn pa-primary pa-full" type="button">Log & Advance</button>
+      </section>
+      <section class="pa-section">
+        <h3>Status</h3>
+        <div id="paStatus" class="pa-card">Idle.</div>
+      </section>
+    </div>
   `;
 
   header.appendChild(brand);
-  header.appendChild(closeBtn);
+  controls.appendChild(refreshBtn);
+  controls.appendChild(closeBtn);
+  header.appendChild(controls);
   drawer.appendChild(header);
   drawer.appendChild(body);
 
@@ -946,7 +1055,7 @@ function renderTemplates(drawer) {
 
     const useBtn = document.createElement("button");
     useBtn.type = "button";
-    useBtn.className = "pa-secondary";
+    useBtn.className = "pa-action-btn pa-secondary";
     useBtn.textContent = "Use Template";
     useBtn.addEventListener("click", async () => {
       STATE.fallback.selectedTemplateId = template.id;
@@ -1011,26 +1120,35 @@ function renderMatch(drawer, person, candidates, errorText) {
 
   candidates.forEach((candidate) => {
     const item = document.createElement("div");
-    item.className = "pa-item";
-    item.textContent = `${candidate.name} (#${candidate.id}) ${candidate.orgName ? `- ${candidate.orgName}` : ""}`;
+    item.className = "pa-candidate-card";
+
+    const name = document.createElement("div");
+    name.className = "pa-candidate-name";
+    name.textContent = candidate.name || `Person #${candidate.id}`;
+
+    const meta = document.createElement("div");
+    meta.className = "pa-candidate-meta";
+    meta.textContent = `Pipedrive ID: ${candidate.id}${candidate.orgName ? ` • ${candidate.orgName}` : ""}`;
 
     const confirm = document.createElement("button");
     confirm.type = "button";
-    confirm.className = "pa-secondary pa-confirm-match";
+    confirm.className = "pa-action-btn pa-primary pa-confirm-match";
     confirm.setAttribute("data-person-id", String(candidate.id));
-    confirm.textContent = "Confirm Match + Save URL";
+    confirm.innerHTML = '<span class="pa-confirm-icon" aria-hidden="true">✓</span><span class="pa-confirm-label">Confirm + Save</span>';
     confirm.addEventListener("click", async (event) => {
       event.preventDefault();
       confirm.disabled = true;
-      const originalText = confirm.textContent;
-      confirm.textContent = "Saving...";
+      const originalHtml = confirm.innerHTML;
+      confirm.innerHTML = '<span class="pa-confirm-icon" aria-hidden="true">…</span><span class="pa-confirm-label">Saving</span>';
       try {
         await runConfirmMatch(drawer, candidate.id);
       } finally {
         confirm.disabled = false;
-        confirm.textContent = originalText;
+        confirm.innerHTML = originalHtml;
       }
     });
+    item.appendChild(name);
+    item.appendChild(meta);
     item.appendChild(confirm);
     candidateRoot.appendChild(item);
   });

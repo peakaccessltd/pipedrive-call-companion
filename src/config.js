@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
-  backendBaseUrl: "http://localhost:8787",
-  configSyncSecret: "",
+  backendBaseUrl: "https://backend-production-9816.up.railway.app",
+  configSyncSecret: "cd58bda4728861c653f8c0749315b438162f9d26233b72ef8edec8fb20105ac4",
   pipedrive: {
     customFields: {
       personLinkedinProfileUrlKey: "person.linkedin_profile_url",

@@ -379,18 +379,21 @@ function injectShadowWidget() {
       border-bottom: 0;
     }
 
-    .pa-item button, .pa-row button {
+    .pa-action-btn {
       border: 1px solid transparent;
       border-radius: 10px;
       padding: 9px 11px;
       font-size: 14px;
       font-weight: 700;
+      line-height: 1.2;
       cursor: pointer;
       font-family: var(--pa-font);
       transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+      appearance: none;
+      -webkit-appearance: none;
     }
 
-    .pa-row button {
+    .pa-row .pa-action-btn {
       min-width: 104px;
     }
 
@@ -484,7 +487,6 @@ function injectShadowWidget() {
       justify-self: end;
       align-self: center;
       min-width: 0;
-      padding: 7px 10px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -604,7 +606,7 @@ function createFallbackDrawer() {
         <div class="pa-match-hint">Search for a person if no direct match is found, then confirm the right record to save the LinkedIn URL back to Pipedrive.</div>
         <div class="pa-row">
           <input id="paSearchName" class="pa-input" type="text" placeholder="Search Pipedrive person by name" />
-          <button id="paSearchBtn" class="pa-secondary" type="button">Search</button>
+        <button id="paSearchBtn" class="pa-action-btn pa-secondary" type="button">Search</button>
         </div>
         <div id="paCandidateList" class="pa-list"></div>
       </section>
@@ -620,12 +622,12 @@ function createFallbackDrawer() {
         <h3>Composer</h3>
         <textarea id="paComposer" class="pa-textarea" placeholder="Template text appears here. You can edit before posting."></textarea>
         <div class="pa-row">
-          <button id="paPostBtn" class="pa-primary" type="button">Post to LinkedIn</button>
-          <button id="paCopyBtn" class="pa-secondary" type="button">Copy</button>
+          <button id="paPostBtn" class="pa-action-btn pa-primary" type="button">Post to LinkedIn</button>
+          <button id="paCopyBtn" class="pa-action-btn pa-secondary" type="button">Copy</button>
         </div>
       </section>
       <section class="pa-section">
-        <button id="paLogBtn" class="pa-primary pa-full" type="button">Log & Advance</button>
+        <button id="paLogBtn" class="pa-action-btn pa-primary pa-full" type="button">Log & Advance</button>
       </section>
       <section class="pa-section">
         <h3>Status</h3>
@@ -1053,7 +1055,7 @@ function renderTemplates(drawer) {
 
     const useBtn = document.createElement("button");
     useBtn.type = "button";
-    useBtn.className = "pa-secondary";
+    useBtn.className = "pa-action-btn pa-secondary";
     useBtn.textContent = "Use Template";
     useBtn.addEventListener("click", async () => {
       STATE.fallback.selectedTemplateId = template.id;
@@ -1130,7 +1132,7 @@ function renderMatch(drawer, person, candidates, errorText) {
 
     const confirm = document.createElement("button");
     confirm.type = "button";
-    confirm.className = "pa-primary pa-confirm-match";
+    confirm.className = "pa-action-btn pa-primary pa-confirm-match";
     confirm.setAttribute("data-person-id", String(candidate.id));
     confirm.innerHTML = '<span class="pa-confirm-icon" aria-hidden="true">✓</span><span class="pa-confirm-label">Confirm + Save</span>';
     confirm.addEventListener("click", async (event) => {

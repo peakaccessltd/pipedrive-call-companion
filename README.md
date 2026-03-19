@@ -64,6 +64,7 @@ Open extension options from `chrome://extensions` -> extension -> **Extension op
 Set at minimum:
 - `Pipedrive API token`
 - `Shared backend base URL` (example: `https://your-service.up.railway.app`)
+- `Config sync secret`
 - Person custom field keys:
   - `personLinkedinProfileUrlKey`
   - `personLinkedinDmSequenceIdKey`
@@ -76,9 +77,9 @@ Optional:
 - No-answer email template JSON overrides
 
 Config sync:
-- `Save` now saves locally and also syncs the config to `GET/PUT /extension-config` on your backend
-- `Pull from backend` restores the saved config from your deployed backend
-- if local settings are empty and `backendBaseUrl` is already known, the extension will try to auto-hydrate from backend on next load
+- `Save` stores config locally in the extension
+- `Pull from backend` restores the centrally managed config from your backend
+- if local settings are empty and both `backendBaseUrl` and `configSyncSecret` are already known, the extension will try to auto-hydrate from backend on next load
 
 Save, then reload extension.
 
@@ -127,7 +128,7 @@ Set environment variables:
 
 ### Online template editor
 
-You can manage shared templates/sequences in-browser:
+You can manage shared templates/sequences and extension config in-browser:
 
 1. Set backend env vars:
    - `ADMIN_USERNAME`
@@ -136,7 +137,14 @@ You can manage shared templates/sequences in-browser:
 3. Open:
    - `https://<your-backend>/admin`
 4. Sign in with basic auth credentials
-5. Edit JSON, then click **Save**
+5. Edit sequences and extension config, then click **Save**
+
+### Config sync auth
+
+Set:
+- `CONFIG_SYNC_SECRET`
+
+The extension uses this secret when calling `GET /extension-config` to restore central config.
 
 ## 5) Pipedrive webhook setup
 

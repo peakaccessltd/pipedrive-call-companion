@@ -1,5 +1,6 @@
 export const APP_CONFIG = {
   backendBaseUrl: "http://localhost:8787",
+  configSyncSecret: "",
   pipedrive: {
     customFields: {
       personLinkedinProfileUrlKey: "person.linkedin_profile_url",
@@ -24,6 +25,7 @@ export const STORAGE_KEYS = {
   showActivities: "showActivities",
   emailTemplatesByStage: "emailTemplatesByStage",
   backendBaseUrl: "backendBaseUrl",
+  configSyncSecret: "configSyncSecret",
   personLinkedinProfileUrlKey: "personLinkedinProfileUrlKey",
   personLinkedinDmSequenceIdKey: "personLinkedinDmSequenceIdKey",
   personLinkedinDmStageKey: "personLinkedinDmStageKey",
@@ -41,6 +43,7 @@ export const DEFAULT_STORAGE = {
   showActivities: true,
   emailTemplatesByStage: "",
   backendBaseUrl: APP_CONFIG.backendBaseUrl,
+  configSyncSecret: APP_CONFIG.configSyncSecret,
   personLinkedinProfileUrlKey: APP_CONFIG.pipedrive.customFields.personLinkedinProfileUrlKey,
   personLinkedinDmSequenceIdKey: APP_CONFIG.pipedrive.customFields.personLinkedinDmSequenceIdKey,
   personLinkedinDmStageKey: APP_CONFIG.pipedrive.customFields.personLinkedinDmStageKey,

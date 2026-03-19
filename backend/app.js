@@ -12,6 +12,7 @@ export function createApp({ baseDir = process.cwd() } = {}) {
   const CALL_DISPOSITION_TRIGGER_LABEL = process.env.CALL_DISPOSITION_TRIGGER_LABEL || "LinkedIn Outreach next step";
   const ADMIN_USERNAME = String(process.env.ADMIN_USERNAME || "").trim();
   const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "").trim();
+  const CONFIG_SYNC_SECRET = String(process.env.CONFIG_SYNC_SECRET || WEBHOOK_SECRET || "").trim();
 
   const sequencesPath = path.join(baseDir, "data", "sequences.json");
   const extensionConfigPath = path.join(baseDir, "data", "extension-config.json");
@@ -61,6 +62,40 @@ export function createApp({ baseDir = process.cwd() } = {}) {
 
     const data = readJson(sequencesPath, { version: 1, updated_at: null, sequences: [] });
     res.json({ ok: true, data });
+  });
+
+  app.get("/admin/api/extension-config", (req, res) => {
+    if (!isAdminAuthorized(req, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD })) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+
+    const data = readJson(extensionConfigPath, normalizeExtensionConfigPayload({}));
+    res.json({ ok: true, data });
+  });
+
+  app.put("/admin/api/extension-config", (req, res) => {
+    if (!isAdminAuthorized(req, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD })) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+
+    const payload = normalizeExtensionConfigPayload(req.body || {});
+    if (!payload.backendBaseUrl) {
+      res.status(400).json({ ok: false, error: "backendBaseUrl is required." });
+      return;
+    }
+
+    try {
+      const nextValue = {
+        ...payload,
+        updated_at: new Date().toISOString()
+      };
+      writeJsonAtomic(extensionConfigPath, nextValue);
+      res.json({ ok: true, data: nextValue });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: `Failed to save extension config: ${error.message || String(error)}` });
+    }
   });
 
   app.put("/admin/api/sequences", (req, res) => {
@@ -145,11 +180,19 @@ export function createApp({ baseDir = process.cwd() } = {}) {
   });
 
   app.get("/extension-config", (_req, res) => {
+    if (!isConfigSyncAuthorized(_req, CONFIG_SYNC_SECRET)) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
     const data = readJson(extensionConfigPath, null);
     res.json({ ok: true, data });
   });
 
   app.put("/extension-config", (req, res) => {
+    if (!isConfigSyncAuthorized(req, CONFIG_SYNC_SECRET)) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
     const payload = normalizeExtensionConfigPayload(req.body || {});
     if (!payload.backendBaseUrl) {
       res.status(400).json({ ok: false, error: "backendBaseUrl is required." });
@@ -207,6 +250,24 @@ export function createApp({ baseDir = process.cwd() } = {}) {
   });
 
   return app;
+}
+
+function isConfigSyncAuthorized(req, configSyncSecret) {
+  if (!configSyncSecret) {
+    return false;
+  }
+
+  const headerSecret = String(req.header("x-peak-access-secret") || "").trim();
+  if (headerSecret && headerSecret === configSyncSecret) {
+    return true;
+  }
+
+  const querySecret = String(req.query?.secret || "").trim();
+  if (querySecret && querySecret === configSyncSecret) {
+    return true;
+  }
+
+  return false;
 }
 
 function isWebhookAuthorized(req, webhookSecret) {
@@ -581,6 +642,10 @@ function renderAdminHtml() {
         font-size: 12px;
         color: var(--muted);
       }
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
       .divider {
         height: 1px;
         background: var(--border);
@@ -590,26 +655,72 @@ function renderAdminHtml() {
   </head>
   <body>
     <div class="wrap">
-      <div class="card">
-        <div class="head">
-          <h1>Peak Access Template Admin</h1>
-          <div class="row">
-            <button id="reloadBtn" class="btn-secondary" type="button">Reload</button>
-            <button id="addSequenceBtn" class="btn-secondary" type="button">Add Sequence</button>
-            <button id="saveBtn" class="btn-primary" type="button">Save</button>
+      <div class="stack">
+        <div class="card">
+          <div class="head">
+            <h1>Peak Access Admin</h1>
+            <div class="row">
+              <button id="reloadBtn" class="btn-secondary" type="button">Reload</button>
+              <button id="addSequenceBtn" class="btn-secondary" type="button">Add Sequence</button>
+              <button id="saveBtn" class="btn-primary" type="button">Save Sequences</button>
+            </div>
           </div>
+          <p class="hint">Manage shared LinkedIn sequences and stage messages here.</p>
+          <div id="sequences" class="sequences"></div>
+          <div id="status" class="status"></div>
         </div>
-        <p class="hint">User-friendly editor for shared LinkedIn sequences/templates. You can have multiple sequence options, each with 3+ stages/messages.</p>
-        <div id="sequences" class="sequences"></div>
-        <div id="status" class="status"></div>
+        <div class="card">
+          <div class="head">
+            <h1>Extension Config</h1>
+            <div class="row">
+              <button id="reloadConfigBtn" class="btn-secondary" type="button">Reload Config</button>
+              <button id="saveConfigBtn" class="btn-primary" type="button">Save Config</button>
+            </div>
+          </div>
+          <p class="hint">This is the central companion config. The extension can restore from this backend config using the sync secret.</p>
+          <div class="grid">
+            <div class="field"><label for="cfgApiToken">Pipedrive API token</label><input id="cfgApiToken" type="text" /></div>
+            <div class="field"><label for="cfgBackendBaseUrl">Backend base URL</label><input id="cfgBackendBaseUrl" type="text" /></div>
+            <div class="field"><label for="cfgProfileUrlKey">LinkedIn Profile URL key</label><input id="cfgProfileUrlKey" type="text" /></div>
+            <div class="field"><label for="cfgSequenceIdKey">DM Sequence ID key</label><input id="cfgSequenceIdKey" type="text" /></div>
+            <div class="field"><label for="cfgStageKey">DM Stage key</label><input id="cfgStageKey" type="text" /></div>
+            <div class="field"><label for="cfgLastSentKey">DM Last Sent key</label><input id="cfgLastSentKey" type="text" /></div>
+            <div class="field"><label for="cfgEligibleKey">DM Eligible key</label><input id="cfgEligibleKey" type="text" /></div>
+            <div class="field"><label for="cfgDispositionFieldKey">Call Disposition field key</label><input id="cfgDispositionFieldKey" type="text" /></div>
+            <div class="field"><label for="cfgDispositionOptionId">Trigger option ID</label><input id="cfgDispositionOptionId" type="text" /></div>
+            <div class="field field-full"><label for="cfgEmailTemplatesByStage">No Answer email templates JSON</label><textarea id="cfgEmailTemplatesByStage"></textarea></div>
+            <label class="row"><input id="cfgAutoOpenPanel" type="checkbox" /> Auto-open panel</label>
+            <label class="row"><input id="cfgShowNotes" type="checkbox" /> Show notes</label>
+            <label class="row"><input id="cfgShowActivities" type="checkbox" /> Show activities</label>
+          </div>
+          <div id="configStatus" class="status"></div>
+        </div>
       </div>
     </div>
     <script>
       const sequencesRoot = document.getElementById("sequences");
       const statusEl = document.getElementById("status");
+      const configStatusEl = document.getElementById("configStatus");
       const reloadBtn = document.getElementById("reloadBtn");
       const addSequenceBtn = document.getElementById("addSequenceBtn");
       const saveBtn = document.getElementById("saveBtn");
+      const reloadConfigBtn = document.getElementById("reloadConfigBtn");
+      const saveConfigBtn = document.getElementById("saveConfigBtn");
+      const configRefs = {
+        apiToken: document.getElementById("cfgApiToken"),
+        backendBaseUrl: document.getElementById("cfgBackendBaseUrl"),
+        personLinkedinProfileUrlKey: document.getElementById("cfgProfileUrlKey"),
+        personLinkedinDmSequenceIdKey: document.getElementById("cfgSequenceIdKey"),
+        personLinkedinDmStageKey: document.getElementById("cfgStageKey"),
+        personLinkedinDmLastSentAtKey: document.getElementById("cfgLastSentKey"),
+        personLinkedinDmEligibleKey: document.getElementById("cfgEligibleKey"),
+        callDispositionFieldKey: document.getElementById("cfgDispositionFieldKey"),
+        callDispositionTriggerOptionId: document.getElementById("cfgDispositionOptionId"),
+        emailTemplatesByStage: document.getElementById("cfgEmailTemplatesByStage"),
+        autoOpenPanel: document.getElementById("cfgAutoOpenPanel"),
+        showNotes: document.getElementById("cfgShowNotes"),
+        showActivities: document.getElementById("cfgShowActivities")
+      };
       let state = { version: 1, updated_at: null, sequences: [] };
       let localCounter = 0;
       const expandedSequences = Object.create(null);
@@ -617,6 +728,11 @@ function renderAdminHtml() {
       function setStatus(msg, ok = true) {
         statusEl.textContent = msg;
         statusEl.className = "status " + (ok ? "ok" : "err");
+      }
+
+      function setConfigStatus(msg, ok = true) {
+        configStatusEl.textContent = msg;
+        configStatusEl.className = "status " + (ok ? "ok" : "err");
       }
 
       function slugify(value) {
@@ -972,6 +1088,18 @@ function renderAdminHtml() {
         setStatus("Loaded.");
       }
 
+      async function loadConfigData() {
+        setConfigStatus("Loading...");
+        const res = await fetch("/admin/api/extension-config", { method: "GET" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setConfigStatus(data.error || "Failed to load config.", false);
+          return;
+        }
+        applyConfigToForm(data.data || {});
+        setConfigStatus("Loaded.");
+      }
+
       async function saveData() {
         const parsed = normalizeForSave();
 
@@ -989,6 +1117,29 @@ function renderAdminHtml() {
         state = data.data;
         renderAll();
         setStatus("Saved.");
+      }
+
+      async function saveConfigData() {
+        const payload = getConfigPayload();
+        const validationError = validateConfigPayload(payload);
+        if (validationError) {
+          setConfigStatus(validationError, false);
+          return;
+        }
+
+        setConfigStatus("Saving...");
+        const res = await fetch("/admin/api/extension-config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          setConfigStatus(data.error || "Failed to save config.", false);
+          return;
+        }
+        applyConfigToForm(data.data || {});
+        setConfigStatus("Saved.");
       }
 
       function addSequence() {
@@ -1015,10 +1166,61 @@ function renderAdminHtml() {
         setStatus("Added new sequence.");
       }
 
+      function applyConfigToForm(value) {
+        configRefs.apiToken.value = value.apiToken || "";
+        configRefs.backendBaseUrl.value = value.backendBaseUrl || "";
+        configRefs.personLinkedinProfileUrlKey.value = value.personLinkedinProfileUrlKey || "";
+        configRefs.personLinkedinDmSequenceIdKey.value = value.personLinkedinDmSequenceIdKey || "";
+        configRefs.personLinkedinDmStageKey.value = value.personLinkedinDmStageKey || "";
+        configRefs.personLinkedinDmLastSentAtKey.value = value.personLinkedinDmLastSentAtKey || "";
+        configRefs.personLinkedinDmEligibleKey.value = value.personLinkedinDmEligibleKey || "";
+        configRefs.callDispositionFieldKey.value = value.callDispositionFieldKey || "";
+        configRefs.callDispositionTriggerOptionId.value = value.callDispositionTriggerOptionId || "";
+        configRefs.emailTemplatesByStage.value = value.emailTemplatesByStage || "";
+        configRefs.autoOpenPanel.checked = Boolean(value.autoOpenPanel);
+        configRefs.showNotes.checked = Boolean(value.showNotes);
+        configRefs.showActivities.checked = Boolean(value.showActivities);
+      }
+
+      function getConfigPayload() {
+        return {
+          apiToken: String(configRefs.apiToken.value || "").trim(),
+          backendBaseUrl: String(configRefs.backendBaseUrl.value || "").trim(),
+          personLinkedinProfileUrlKey: String(configRefs.personLinkedinProfileUrlKey.value || "").trim(),
+          personLinkedinDmSequenceIdKey: String(configRefs.personLinkedinDmSequenceIdKey.value || "").trim(),
+          personLinkedinDmStageKey: String(configRefs.personLinkedinDmStageKey.value || "").trim(),
+          personLinkedinDmLastSentAtKey: String(configRefs.personLinkedinDmLastSentAtKey.value || "").trim(),
+          personLinkedinDmEligibleKey: String(configRefs.personLinkedinDmEligibleKey.value || "").trim(),
+          callDispositionFieldKey: String(configRefs.callDispositionFieldKey.value || "").trim(),
+          callDispositionTriggerOptionId: String(configRefs.callDispositionTriggerOptionId.value || "").trim(),
+          emailTemplatesByStage: String(configRefs.emailTemplatesByStage.value || "").trim(),
+          autoOpenPanel: configRefs.autoOpenPanel.checked,
+          showNotes: configRefs.showNotes.checked,
+          showActivities: configRefs.showActivities.checked
+        };
+      }
+
+      function validateConfigPayload(payload) {
+        if (!payload.backendBaseUrl) {
+          return "Backend base URL is required.";
+        }
+        if (payload.emailTemplatesByStage) {
+          try {
+            JSON.parse(payload.emailTemplatesByStage);
+          } catch (_error) {
+            return "No Answer email template JSON is invalid.";
+          }
+        }
+        return "";
+      }
+
       reloadBtn.addEventListener("click", loadData);
       addSequenceBtn.addEventListener("click", addSequence);
       saveBtn.addEventListener("click", saveData);
+      reloadConfigBtn.addEventListener("click", loadConfigData);
+      saveConfigBtn.addEventListener("click", saveConfigData);
       loadData();
+      loadConfigData();
     </script>
   </body>
 </html>`;

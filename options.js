@@ -5,6 +5,7 @@ const DEFAULTS = {
   showActivities: true,
   emailTemplatesByStage: "",
   backendBaseUrl: "http://localhost:8787",
+  configSyncSecret: "",
   personLinkedinProfileUrlKey: "person.linkedin_profile_url",
   personLinkedinDmSequenceIdKey: "person.linkedin_dm_sequence_id",
   personLinkedinDmStageKey: "person.linkedin_dm_stage",
@@ -18,6 +19,7 @@ const DEFAULTS = {
 const refs = {
   apiToken: document.getElementById("apiToken"),
   backendBaseUrl: document.getElementById("backendBaseUrl"),
+  configSyncSecret: document.getElementById("configSyncSecret"),
   personLinkedinProfileUrlKey: document.getElementById("personLinkedinProfileUrlKey"),
   personLinkedinDmSequenceIdKey: document.getElementById("personLinkedinDmSequenceIdKey"),
   personLinkedinDmStageKey: document.getElementById("personLinkedinDmStageKey"),
@@ -31,7 +33,6 @@ const refs = {
   showActivities: document.getElementById("showActivities"),
   save: document.getElementById("save"),
   pullRemote: document.getElementById("pullRemote"),
-  pushRemote: document.getElementById("pushRemote"),
   reset: document.getElementById("reset"),
   status: document.getElementById("status")
 };
@@ -43,7 +44,6 @@ function init() {
 
   refs.save.addEventListener("click", save);
   refs.pullRemote.addEventListener("click", pullFromBackend);
-  refs.pushRemote.addEventListener("click", pushToBackend);
   refs.reset.addEventListener("click", resetDefaults);
 }
 
@@ -67,18 +67,13 @@ async function save() {
 
   chrome.storage.sync.set(
     payload,
-    async () => {
+    () => {
       if (chrome.runtime.lastError) {
         setStatus(`Failed to save: ${chrome.runtime.lastError.message}`, true);
         return;
       }
 
-      try {
-        await saveRemoteConfig(payload);
-        setStatus("Settings saved locally and synced to backend.");
-      } catch (error) {
-        setStatus(`Settings saved locally. Backend sync skipped: ${error.message || String(error)}`, true);
-      }
+      setStatus("Settings saved locally.");
     }
   );
 }
@@ -122,26 +117,11 @@ async function pullFromBackend({ silentOnEmpty = false } = {}) {
   }
 }
 
-async function pushToBackend() {
-  const payload = getFormValues();
-  const validationError = validateValues(payload);
-  if (validationError) {
-    setStatus(validationError, true);
-    return;
-  }
-
-  try {
-    await saveRemoteConfig(payload);
-    setStatus("Pushed current config to backend.");
-  } catch (error) {
-    setStatus(`Failed to push config: ${error.message || String(error)}`, true);
-  }
-}
-
 function getFormValues() {
   return {
     apiToken: String(refs.apiToken.value || "").trim(),
     backendBaseUrl: String(refs.backendBaseUrl.value || "").trim(),
+    configSyncSecret: String(refs.configSyncSecret.value || "").trim(),
     personLinkedinProfileUrlKey: String(refs.personLinkedinProfileUrlKey.value || "").trim(),
     personLinkedinDmSequenceIdKey: String(refs.personLinkedinDmSequenceIdKey.value || "").trim(),
     personLinkedinDmStageKey: String(refs.personLinkedinDmStageKey.value || "").trim(),
@@ -159,6 +139,7 @@ function getFormValues() {
 function applyValuesToForm(result) {
   refs.apiToken.value = result.apiToken || "";
   refs.backendBaseUrl.value = result.backendBaseUrl || "";
+  refs.configSyncSecret.value = result.configSyncSecret || "";
   refs.personLinkedinProfileUrlKey.value = result.personLinkedinProfileUrlKey || "";
   refs.personLinkedinDmSequenceIdKey.value = result.personLinkedinDmSequenceIdKey || "";
   refs.personLinkedinDmStageKey.value = result.personLinkedinDmStageKey || "";
@@ -187,30 +168,21 @@ function shouldHydrateFromBackend(result) {
   const backendBaseUrl = String(result.backendBaseUrl || DEFAULTS.backendBaseUrl || "").trim();
   if (!backendBaseUrl || backendBaseUrl === "http://localhost:8787") return false;
 
-  return !String(result.apiToken || "").trim()
+  return (!String(result.apiToken || "").trim()
+    || !String(result.configSyncSecret || "").trim()
     || !String(result.personLinkedinProfileUrlKey || "").trim()
-    || !String(result.personLinkedinDmStageKey || "").trim();
+    || !String(result.personLinkedinDmStageKey || "").trim());
 }
 
 async function fetchRemoteConfig(backendBaseUrl) {
-  const response = await fetch(`${normalizeBackendBaseUrl(backendBaseUrl)}/extension-config`, { method: "GET" });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) {
-    throw new Error(data.error || `HTTP ${response.status}`);
-  }
-  return data.data || null;
-}
-
-async function saveRemoteConfig(payload) {
-  const backendBaseUrl = String(payload.backendBaseUrl || "").trim();
-  if (!backendBaseUrl || backendBaseUrl === "http://localhost:8787") {
-    throw new Error("Set your deployed backend base URL before syncing.");
+  const configSyncSecret = String(refs.configSyncSecret.value || "").trim();
+  if (!configSyncSecret) {
+    throw new Error("Config sync secret is required.");
   }
 
   const response = await fetch(`${normalizeBackendBaseUrl(backendBaseUrl)}/extension-config`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    method: "GET",
+    headers: { "x-peak-access-secret": configSyncSecret }
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {

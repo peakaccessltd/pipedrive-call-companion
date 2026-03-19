@@ -197,17 +197,38 @@ function injectShadowWidget() {
       letter-spacing: 0.2px;
     }
 
-    .pa-drawer-header button {
+    .pa-header-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pa-icon-btn {
       border: 1px solid var(--pa-border);
       border-radius: 10px;
       background: #f7faf7;
       color: #2f4f2f;
+      height: 32px;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       font-size: 12px;
       font-weight: 700;
-      padding: 0 10px;
-      height: 32px;
-      cursor: pointer;
       font-family: var(--pa-font);
+      cursor: pointer;
+    }
+
+    .pa-icon-btn:hover {
+      background: #edf6ed;
+    }
+
+    .pa-icon-glyph {
+      font-size: 13px;
+      line-height: 1;
+    }
+
+    .pa-icon-label {
+      font-size: 12px;
     }
 
     .pa-body {
@@ -339,7 +360,7 @@ function injectShadowWidget() {
       border-bottom: 0;
     }
 
-    .pa-item button, .pa-row button, .pa-top-actions button {
+    .pa-item button, .pa-row button {
       border: 1px solid transparent;
       border-radius: 4px;
       padding: 9px 11px;
@@ -380,12 +401,6 @@ function injectShadowWidget() {
 
     .pa-secondary:hover {
       background: #edf6ed;
-    }
-
-    .pa-top-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
     }
 
     .pa-drawer-brand {
@@ -518,9 +533,19 @@ function createFallbackDrawer() {
   brand.appendChild(logo);
   brand.appendChild(headerTitle);
 
+  const controls = document.createElement("div");
+  controls.className = "pa-header-controls";
+
+  const refreshBtn = document.createElement("button");
+  refreshBtn.type = "button";
+  refreshBtn.id = "paRefreshBtn";
+  refreshBtn.className = "pa-icon-btn";
+  refreshBtn.innerHTML = '<span class="pa-icon-glyph" aria-hidden="true">↻</span><span class="pa-icon-label">Refresh</span>';
+
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
-  closeBtn.textContent = "Close";
+  closeBtn.className = "pa-icon-btn";
+  closeBtn.innerHTML = '<span class="pa-icon-glyph" aria-hidden="true">✕</span><span class="pa-icon-label">Hide</span>';
   closeBtn.addEventListener("click", () => {
     STATE.drawerVisible = false;
     updateDrawerState();
@@ -529,9 +554,6 @@ function createFallbackDrawer() {
   const body = document.createElement("div");
   body.className = "pa-body";
   body.innerHTML = `
-    <div class="pa-top-actions">
-      <button id="paRefreshBtn" class="pa-secondary" type="button">Refresh</button>
-    </div>
     <section class="pa-section">
       <h3>Detected LinkedIn Context</h3>
       <div id="paContextCard" class="pa-card"></div>
@@ -570,7 +592,9 @@ function createFallbackDrawer() {
   `;
 
   header.appendChild(brand);
-  header.appendChild(closeBtn);
+  controls.appendChild(refreshBtn);
+  controls.appendChild(closeBtn);
+  header.appendChild(controls);
   drawer.appendChild(header);
   drawer.appendChild(body);
 
